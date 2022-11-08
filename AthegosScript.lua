@@ -27,13 +27,13 @@ end)
 
 local response = false
 local localVer = 0.1
-async_http.init("raw.githubusercontent.com", "/BassamKhaleel/Athegos-Skript-DEV-Stand/main/AthegosSkriptVersion", function(output)
+async_http.init("raw.githubusercontent.com", "/BassamKhaleel/Athegos-Script-Stand/main/VersionCheck", function(output)
     currentVer = tonumber(output)
     response = true
     if localVer ~= currentVer then
         util.toast("[Athego's Script] Eine neue Version von Athego‘s Skript ist verfügbar, bitte Update das Skript")
         menu.action(menu.my_root(), "Update Lua", {}, "", function()
-            async_http.init('raw.githubusercontent.com','/BassamKhaleel/Athegos-Skript-DEV-Stand/main/Athegos_Script_DEV.lua',function(a)
+            async_http.init('raw.githubusercontent.com','/BassamKhaleel/Athegos-Script-Stand/main/Athegos_Script_DEV.lua',function(a)
                 local err = select(2,load(a))
                 if err then
                     util.toast("[Athego's Script] Fehler beim Updaten des Skript‘s. Probiere es später erneut. Sollte der Fehler weiterhin auftreten Update das Skript Manuell über GitHub.")
