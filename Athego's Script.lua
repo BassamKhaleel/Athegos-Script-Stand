@@ -12,7 +12,7 @@ util.require_natives(1663599433)
 ---------------------
 ---------------------
 
-util.toast("Athego's Script erfolgreich geladen! DEV Version 1.88")
+util.toast("Athego's Script erfolgreich geladen! Version 0.1")
 
 util.show_corner_help("~s~Viel Spaß mit~h~~b~ " .. SCRIPT_FILENAME)
 util.on_stop(function()
@@ -26,7 +26,7 @@ end)
 ---------------------
 
 local response = false
-local localVer = 1.88
+local localVer = 0.1
 async_http.init("raw.githubusercontent.com", "/BassamKhaleel/Athegos-Skript-DEV-Stand/main/AthegosSkriptVersion", function(output)
     currentVer = tonumber(output)
     response = true
