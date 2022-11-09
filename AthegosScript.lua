@@ -11,7 +11,7 @@ util.require_natives(1663599433)
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.4)                                                      --Aktuelle Script Version
+sversion = tonumber(0.5)                                            --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -19,6 +19,24 @@ local pedInterface = memory.read_long(replayInterface + 0x0018)
 local vehInterface = memory.read_long(replayInterface + 0x0010)
 local objectInterface = memory.read_long(replayInterface + 0x0028)
 local pickupInterface = memory.read_long(replayInterface + 0x0020)
+
+---------------------
+---------------------
+-- function für Godmode Check
+---------------------
+---------------------
+
+local function get_transition_state(pid)
+    return memory.read_int(memory.script_global(((0x2908D3 + 1) + (pid * 0x1C5)) + 230))
+end
+
+local function get_interior_player_is_in(pid)
+    return memory.read_int(memory.script_global(((0x2908D3 + 1) + (pid * 0x1C5)) + 243)) 
+end
+
+local function is_player_in_interior(pid)
+    return (memory.read_int(memory.script_global(0x2908D3 + 1 + (pid * 0x1C5) + 243)) ~= 0)
+end
 
 ---------------------
 ---------------------
@@ -102,6 +120,43 @@ local function get_last_lines(file)
     f:close()
     get_stand_stdout(lines, max_lines)
 end
+
+---------------------
+---------------------
+-- On Chat function
+---------------------
+---------------------
+
+local racist_dict = {"nigg", "jew", "nigga"}
+local homophobic_dict = {"fag", "tranny"}
+local stupid_detections_dict = {"Freeze from", "Vehicle takeover from", "Modded Event (", "triggered a detection:", "Model sync by"}
+
+chat.on_message(function(packet_sender, message_sender, text, team_chat)
+    text = string.lower(text)
+    local name = players.get_name(message_sender)
+
+    if not team_chat then
+        if rassismus_beenden then 
+            for _,word in pairs(racist_dict) do 
+                if string.contains(text, word) then
+                    menu.trigger_commands("kick " .. name)
+                    util.toast(sprefix .. "" .. name .. " SAID THE N-WORD and was kicked")
+                    util.log(sprefix .. "" .. name .. " SAID THE N-WORD and was kicked")
+                end
+            end
+        end
+
+        if homophobie_beenden then 
+            for _,word in pairs(homophobic_dict) do 
+                if string.contains(text, word) then
+                    menu.trigger_commands("kick " .. name)
+                    util.toast(sprefix .. "" .. name .. " was homophobic and was kicked")
+                    util.log(sprefix .. "" .. name .. " was homophobic and was kicked")
+                end
+            end
+        end
+    end
+end)
 
 ---------------------
 ---------------------
@@ -292,13 +347,16 @@ local interiors = {
     {"Strip Club DJ Booth", {x=121.398254, y=-1281.0024, z=29.480522}},
 }
 
+local interior_stuff = {0, 233985, 169473, 169729, 169985, 170241, 177665, 177409, 185089, 184833, 184577, 163585, 167425, 167169}
+
 ---------------------
 ---------------------
 -- Script geladen Notify
 ---------------------
 ---------------------
 
-util.toast("" .. willkommensnachricht .. "")                        --Die Willkommensnachricht
+util.toast("" .. willkommensnachricht .. "")
+util.log("" .. willkommensnachricht .. "")                        --Die Willkommensnachricht
 
 util.show_corner_help("~s~Viel Spaß mit~h~~b~ " .. SCRIPT_FILENAME)
 util.on_stop(function()
@@ -348,10 +406,10 @@ until response
 menu.divider(menu.my_root(), "Athego's Script - " .. sversion)
 local self <const> = menu.list(menu.my_root(), "Selbst", {}, "")
     menu.divider(self, "Athego's Script - Selbst")
+local online <const> = menu.list(menu.my_root(), "Online", {}, "")
+    menu.divider(online, "Athego's Script - Online")
 local loadout <const> = menu.list(menu.my_root(), "Loadout", {}, "")
     menu.divider(loadout, "Athego's Script - Loadout")
-local erkennungen <const> = menu.list(menu.my_root(), "Erkennungen", {}, "")
-    menu.divider(erkennungen, "Athego's Script - Erkennungen")
 local sonstiges <const> = menu.list(menu.my_root(), "Sonstiges", {}, "")
     menu.divider(sonstiges, "Athego's Script - Sonstiges")
 
@@ -361,6 +419,10 @@ local sonstiges <const> = menu.list(menu.my_root(), "Sonstiges", {}, "")
 ---------------------
 ---------------------
 
+menu.toggle(self, "Leiser Schritt", {}, "Entfernt die Geräusche die du beim gehen machst", function (toggle)
+    AUDIO.SET_PED_FOOTSTEPS_EVENTS_ENABLED(players.user_ped(), not toggle)
+end)
+
 ---------------------
 ---------------------
 -- Selbst/Unlocks
@@ -369,9 +431,46 @@ local sonstiges <const> = menu.list(menu.my_root(), "Sonstiges", {}, "")
 
 ---------------------
 ---------------------
--- Erkennungen
+-- Online
 ---------------------
 ---------------------
+
+local detections = menu.list(online, "Erkennungen", {}, "")
+    menu.divider(detections, "Athego's Script - Erkennungen")
+
+menu.toggle_loop(detections, "Godmode", {}, "Erkennt ob jemand Godmode benutzt", function()
+    for _, pid in ipairs(players.list(false, true, true)) do
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local pos = ENTITY.GET_ENTITY_COORDS(ped, false)
+        for i, interior in ipairs(interior_stuff) do
+            if (players.is_godmode(pid) or not ENTITY.GET_ENTITY_CAN_BE_DAMAGED(ped)) and not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped) and get_transition_state(pid) == 99 and get_interior_player_is_in(pid) == interior then
+                util.draw_debug_text("[Athego's Script] " .. players.get_name(pid) .. " benutzt Godmode")
+                util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt Godmode")
+                util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt Godmode")
+                break
+            end
+        end
+    end
+end)
+
+---------------------
+---------------------
+-- Online/Protections
+---------------------
+---------------------
+
+local protections = menu.list(online, "Schutzmaßnahmen", {}, "")
+    menu.divider(protections, "Athego's Script - Schutzmaßnahmen")
+
+rassismus_beenden = false
+menu.toggle(protections, "Rassimus beenden", {}, "Kickt Rassistische Spieler", function(on)
+    rassismus_beenden = on
+end)
+
+homophobie_beenden = false
+menu.toggle(protections, "Homophobie beenden", {}, "Kickt Homophobe Spieler", function(on)
+    homophobie_beenden = on
+end)
 
 ---------------------
 ---------------------
