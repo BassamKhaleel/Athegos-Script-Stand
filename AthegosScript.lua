@@ -11,7 +11,7 @@ util.require_natives(1663599433)
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.3)                                                      --Aktuelle Script Version
+sversion = tonumber(0.4)                                                      --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -40,6 +40,68 @@ else
 end
 local attachments_dict = wpcmpTable[1]
 local liveries_dict = wpcmpTable[2]
+
+---------------------
+---------------------
+-- Checks/Variablen für IngameKonsole
+---------------------
+---------------------
+
+local log_dir = filesystem.stand_dir() .. '\\Log.txt'
+local full_stdout = ""
+local disp_stdout = ""
+local max_chars = 200
+local max_lines = 20
+local font_size = 0.35
+local timestamp_toggle = false
+
+local text_color = {r = 1, g = 1, b = 1, a = 1}
+local bg_color = {r = 0, g = 0, b = 0, a = 0.5}
+
+local function get_stand_stdout(tbl, n)
+    local all_lines = {}
+    local disp_lines = {}
+    local size = #tbl
+    local index = 1
+    if size >= n then 
+        index = #tbl - n
+    end
+
+    for i=index, size do 
+        local line = tbl[i]
+        local line_copy = line
+        if line ~= "" and line ~= '\n' then
+            all_lines[#all_lines + 1] = line
+            if not timestamp_toggle then
+               -- at this point, the line is already added to all lines, so we can just customize it and it wont affect STDOUT clipboard copy
+                local _, second_segment = string.partition(line, ']')
+                if second_segment ~= nil then
+                    line = second_segment
+                end
+            end
+            if string.len(line) > max_chars then
+                disp_lines[#disp_lines + 1] = line:sub(1, max_chars) .. ' ...'
+            else
+                disp_lines[#disp_lines + 1] = line
+            end
+        end
+    end
+
+    -- full_stdout exists so that we can copy the entire console output without "aesthetic" changes or trimming
+    -- disp_stdout is the aesthetic, possibly-formatted version that you actually see in-game, WITH trimming
+    full_stdout = table.concat(all_lines, '\n')
+    disp_stdout = table.concat(disp_lines, '\n')
+end
+
+local function get_last_lines(file)
+    local f = io.open(file, "r")
+    local len = f:seek("end")
+    f:seek("set", len - max_lines*1000)
+    local text = f:read("*a")
+    lines = string.split(text, '\n')
+    f:close()
+    get_stand_stdout(lines, max_lines)
+end
 
 ---------------------
 ---------------------
@@ -288,6 +350,10 @@ local self <const> = menu.list(menu.my_root(), "Selbst", {}, "")
     menu.divider(self, "Athego's Script - Selbst")
 local loadout <const> = menu.list(menu.my_root(), "Loadout", {}, "")
     menu.divider(loadout, "Athego's Script - Loadout")
+local erkennungen <const> = menu.list(menu.my_root(), "Erkennungen", {}, "")
+    menu.divider(erkennungen, "Athego's Script - Erkennungen")
+local sonstiges <const> = menu.list(menu.my_root(), "Sonstiges", {}, "")
+    menu.divider(sonstiges, "Athego's Script - Sonstiges")
 
 ---------------------
 ---------------------
@@ -298,6 +364,12 @@ local loadout <const> = menu.list(menu.my_root(), "Loadout", {}, "")
 ---------------------
 ---------------------
 -- Selbst/Unlocks
+---------------------
+---------------------
+
+---------------------
+---------------------
+-- Erkennungen
 ---------------------
 ---------------------
 
@@ -642,6 +714,73 @@ if do_autoload then
     load_loadout:trigger()
 end
 
+---------------------
+---------------------
+-- Sonstiges
+---------------------
+---------------------
+
+local ingame_konsole = menu.list(sonstiges, "Ingame Konsole", {}, "")
+    menu.divider(ingame_konsole, "Athego's Script - Ingame Konsole")
+
+--menu.action(ingame_konsole, "Output in Zwischenablage", {}, "Copy the full, untrimmed last x lines of the STDOUT to clipboard.", function()
+--    util.copy_to_clipboard(full_stdout, true)
+--end)
+
+menu.slider(ingame_konsole, "Maximale Zeichenanzahl", {}, "", 1, 1000, 200, 1, function(s)
+    max_chars = s
+end)
+
+menu.slider(ingame_konsole, "Maximal angezeigte Zeilen", {}, "", 1, 60, 20, 1, function(s)
+    max_lines = s
+end)
+
+menu.slider_float(ingame_konsole, "Schriftgröße", {}, "", 1, 1000, 35, 1, function(s)
+    font_size = s*0.01
+end)
+
+menu.toggle(ingame_konsole, "Zeitstempel", {"konsolezeitstempel"}, "", function(on)
+    timestamp_toggle = on
+end, false)
+
+draw_toggle = false
+menu.toggle(ingame_konsole, "Konsole einblenden", {"konsoleeinblenden"}, "", function(on)
+    draw_toggle = on
+end, false)
+
+menu.colour(ingame_konsole, "Text Farbe", {}, "", 1, 1, 1, 1, true, function(on_change)
+    text_color = on_change
+end)
+
+menu.colour(ingame_konsole, "Hintergrund Farbe", {}, "", 0, 0, 0, 0.5, true, function(on_change)
+    bg_color = on_change
+end)
+
+util.create_tick_handler(function()
+    local text = get_last_lines(log_dir)
+    if draw_toggle then
+        local size_x, size_y = directx.get_text_size(disp_stdout, font_size)
+        size_x += 0.01
+        size_y += 0.01
+        directx.draw_rect(0.0, 0.06, size_x, size_y, bg_color)
+        directx.draw_text(0.0, 0.06, disp_stdout, 0, font_size, text_color, true)
+    end
+end)
+
+---------------------
+---------------------
+-- Funktion das das Script weiter läuft
+---------------------
+---------------------
+
+util.keep_running()
+
+---------------------
+---------------------
+-- While schleife für autoload des Loadouts -- Muss ganz unten stehen da sonst anderer Code nicht funktioniert
+---------------------
+---------------------
+
 while true do
     if NETWORK.NETWORK_IS_IN_SESSION() == false then
         while NETWORK.NETWORK_IS_IN_SESSION() == false or util.is_session_transition_active() do
@@ -662,11 +801,3 @@ while true do
     end
     util.yield(100)
 end
-
----------------------
----------------------
--- Funktion das das Script weiter läuft
----------------------
----------------------
-
-util.keep_running()
