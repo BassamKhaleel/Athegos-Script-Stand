@@ -11,7 +11,7 @@ util.require_natives(1663599433)
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.5)                                            --Aktuelle Script Version
+sversion = tonumber(0.6)                                            --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -19,6 +19,37 @@ local pedInterface = memory.read_long(replayInterface + 0x0018)
 local vehInterface = memory.read_long(replayInterface + 0x0010)
 local objectInterface = memory.read_long(replayInterface + 0x0028)
 local pickupInterface = memory.read_long(replayInterface + 0x0020)
+local playerid = players.user()
+local requestModel = STREAMING.REQUEST_MODEL
+
+---------------------
+---------------------
+-- function zum Spawnen von verschiedenen Objekten
+---------------------
+---------------------
+
+local function request_model(hash, timeout)
+    timeout = timeout or 3
+    STREAMING.REQUEST_MODEL(hash)
+    local end_time = os.time() + timeout
+    repeat
+        util.yield()
+    until STREAMING.HAS_MODEL_LOADED(hash) or os.time() >= end_time
+    return STREAMING.HAS_MODEL_LOADED(hash)
+end
+
+---------------------
+---------------------
+-- function für player_toggle_loop
+---------------------
+---------------------
+
+local function player_toggle_loop(root, pid, menu_name, command_names, help_text, callback)
+    return menu.toggle_loop(root, menu_name, command_names, help_text, function()
+        if not players.exists(pid) then util.stop_thread() end
+        callback()
+    end)
+end
 
 ---------------------
 ---------------------
@@ -140,8 +171,8 @@ chat.on_message(function(packet_sender, message_sender, text, team_chat)
             for _,word in pairs(racist_dict) do 
                 if string.contains(text, word) then
                     menu.trigger_commands("kick " .. name)
-                    util.toast(sprefix .. "" .. name .. " SAID THE N-WORD and was kicked")
-                    util.log(sprefix .. "" .. name .. " SAID THE N-WORD and was kicked")
+                    util.toast(sprefix .. " " .. name .. " ist rassistisch und wurde deswegen gekickt")
+                    util.log(sprefix .. " " .. name .. " ist rassistisch und wurde deswegen gekickt")
                 end
             end
         end
@@ -150,8 +181,8 @@ chat.on_message(function(packet_sender, message_sender, text, team_chat)
             for _,word in pairs(homophobic_dict) do 
                 if string.contains(text, word) then
                     menu.trigger_commands("kick " .. name)
-                    util.toast(sprefix .. "" .. name .. " was homophobic and was kicked")
-                    util.log(sprefix .. "" .. name .. " was homophobic and was kicked")
+                    util.toast(sprefix .. " " .. name .. " ist homophob und wurde deswegen gekickt")
+                    util.log(sprefix .. " " .. name .. " ist homophob und wurde deswegen gekickt")
                 end
             end
         end
@@ -435,6 +466,12 @@ end)
 ---------------------
 ---------------------
 
+---------------------
+---------------------
+-- Online/Erkennungen
+---------------------
+---------------------
+
 local detections = menu.list(online, "Erkennungen", {}, "")
     menu.divider(detections, "Athego's Script - Erkennungen")
 
@@ -470,6 +507,24 @@ end)
 homophobie_beenden = false
 menu.toggle(protections, "Homophobie beenden", {}, "Kickt Homophobe Spieler", function(on)
     homophobie_beenden = on
+end)
+
+---------------------
+---------------------
+-- Online
+---------------------
+---------------------
+
+menu.action(online, 'Schneeballschlacht', {}, 'Schenkt allen in der Lobby Schneebälle und benachrichtigt sie per SMS', function ()
+    local plist = players.list()
+    local snowballs = util.joaat('WEAPON_SNOWBALL')
+    for i = 1, #plist do
+        local plyr = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(plist[i])
+        WEAPON.GIVE_DELAYED_WEAPON_TO_PED(plyr, snowballs, 20, true)
+        WEAPON.SET_PED_AMMO(plyr, snowballs, 20)
+        players.send_sms(plist[i], playerid, 'Snowball Fight! You now have snowballs')
+        util.yield()
+    end
 end)
 
 ---------------------
@@ -865,6 +920,116 @@ util.create_tick_handler(function()
         directx.draw_text(0.0, 0.06, disp_stdout, 0, font_size, text_color, true)
     end
 end)
+
+---------------------
+---------------------
+-- Spieler Liste
+---------------------
+---------------------
+
+local function player(pid)
+    menu.divider(menu.player_root(pid), "Athego's Script")
+
+    ---------------------
+    ---------------------
+    -- Spieler Liste/Anti Modder
+    ---------------------
+    ---------------------
+
+    local friendly = menu.list(menu.player_root(pid), "Athego's Script: Freundlich", {}, "")
+        menu.divider(friendly, "Freundlich")
+
+    ---------------------
+    ---------------------
+    -- Spieler Liste/Anti Modder
+    ---------------------
+    ---------------------
+
+    local anti_modder = menu.list(menu.player_root(pid), "Athego's Script: Anti Modder", {}, "")
+        menu.divider(anti_modder, "Anti-Modder")
+
+    player_toggle_loop(anti_modder, pid, "Entferne Godmode", {}, "Wird von den meisten Menüs gegblockt", function()
+        util.trigger_script_event(1 << pid, {0xAD36AA57, pid, 0x96EDB12F, math.random(0, 0x270F)})
+    end)
+
+    player_toggle_loop(anti_modder, pid, "Entferne Fahrzeug Godmode", {}, "Wird von den meisten Menüs gegblockt", function()
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        if PED.IS_PED_IN_ANY_VEHICLE(ped, false) and not PED.IS_PED_DEAD_OR_DYING(ped) then
+            local veh = PED.GET_VEHICLE_PED_IS_IN(ped, false)
+            ENTITY.SET_ENTITY_CAN_BE_DAMAGED(veh, true)
+            ENTITY.SET_ENTITY_INVINCIBLE(veh, false)
+            ENTITY.SET_ENTITY_PROOFS(veh, false, false, false, false, false, 0, 0, false)
+        end
+    end)
+
+    ---------------------
+    ---------------------
+    -- Spieler Liste/Anti Modder/Kill Godmode
+    ---------------------
+    ---------------------
+
+    local kill_godmode = menu.list(anti_modder, "Töte Godmode Spieler", {}, "")
+        menu.divider(kill_godmode, "Töte Godmode Spieler")
+
+    player_toggle_loop(kill_godmode, pid, "Stun", {}, "Funktioniert bei Menüs, die Proofs für den Godmode verwenden", function()
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local pos = ENTITY.GET_ENTITY_COORDS(ped)
+        MISC.SHOOT_SINGLE_BULLET_BETWEEN_COORDS(pos.x, pos.y, pos.z + 1, pos.x, pos.y, pos.z, 99999, true, util.joaat("weapon_stungun"), players.user_ped(), false, true, 1.0)
+    end)
+
+    menu.slider_text(kill_godmode, "Zerdrücken", {}, "", {"Khanjali", "APC"}, function(index, veh)
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local pos = ENTITY.GET_ENTITY_COORDS(ped)
+        local vehicle = util.joaat(veh)
+        request_model(vehicle)
+
+        pluto_switch veh do
+            case "Khanjali":
+            height = 2.8
+            offset = 0
+            break
+            case "APC":
+            height = 3.4
+            offset = -1.5
+            break
+        end
+
+        if TASK.IS_PED_STILL(ped) then
+            distance = 0
+        elseif not TASK.IS_PED_STILL(ped) then
+            distance = 3
+        end
+
+        local vehicle1 = entities.create_vehicle(vehicle, ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(ped, offset, distance, height), ENTITY.GET_ENTITY_HEADING(ped))
+        local vehicle2 = entities.create_vehicle(vehicle, pos, 0)
+        local vehicle3 = entities.create_vehicle(vehicle, pos, 0)
+        local vehicle4 = entities.create_vehicle(vehicle, pos, 0)
+        local spawned_vehs = {vehicle4, vehicle3, vehicle2, vehicle1}
+        ENTITY.ATTACH_ENTITY_TO_ENTITY(vehicle2, vehicle1, 0, 0, 3, 0, 0, 0, -180, 0, false, true, false, 0, true)
+        ENTITY.ATTACH_ENTITY_TO_ENTITY(vehicle3, vehicle1, 0, 3, 3, 0, 0, 0, -180, 0, false, true, false, 0, true)
+        ENTITY.ATTACH_ENTITY_TO_ENTITY(vehicle4, vehicle1, 0, 3, 0, 0, 0, 0, 0, 0, false, true, false, 0, true)
+        ENTITY.SET_ENTITY_VISIBLE(vehicle1, false)
+        util.yield(5000)
+        for i = 1, #spawned_vehs do
+            entities.delete_by_handle(spawned_vehs[i])
+        end
+    end)
+
+    -- player_toggle_loop(kill_godmode, pid, "Explodieren", {}, "Wird von den meisten Menüs gegblockt", function()
+    --     local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+    --     local pos = ENTITY.GET_ENTITY_COORDS(ped)
+    --     if not PED.IS_PED_DEAD_OR_DYING(ped) and not NETWORK.NETWORK_IS_PLAYER_FADING(pid) then
+    --         util.trigger_script_event(1 << pid, {0xAD36AA57, pid, 0x96EDB12F, math.random(0, 0x270F)})
+    --         FIRE.ADD_OWNED_EXPLOSION(players.user_ped(), pos, 2, 50, true, false, 0.0)
+    --     end
+    -- end)
+
+
+
+end
+
+players.on_join(player)
+players.dispatch_on_join()
 
 ---------------------
 ---------------------
