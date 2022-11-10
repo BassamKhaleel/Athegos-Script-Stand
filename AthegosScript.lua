@@ -11,7 +11,7 @@ util.require_natives(1663599433)
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.6)                                            --Aktuelle Script Version
+sversion = tonumber(0.7)                                            --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -21,6 +21,20 @@ local objectInterface = memory.read_long(replayInterface + 0x0028)
 local pickupInterface = memory.read_long(replayInterface + 0x0020)
 local playerid = players.user()
 local requestModel = STREAMING.REQUEST_MODEL
+
+---------------------
+---------------------
+-- functions zum claimen von zerstörten Autos bei Mors Mutual Insurance
+---------------------
+---------------------
+
+local function clearBit(addr, bitIndex)
+    memory.write_int(addr, memory.read_int(addr) & ~(1<<bitIndex))
+end
+
+local function bitTest(addr, offset)
+    return (memory.read_int(addr) & (1 << offset)) ~= 0
+end
 
 ---------------------
 ---------------------
@@ -396,6 +410,16 @@ end)
 
 ---------------------
 ---------------------
+-- Script neuladen
+---------------------
+---------------------
+
+menu.action(menu.my_root(), 'Script neuladen', {}, 'Startet das Skript neu, um nach Updates zu suchen', function ()
+    util.restart_script()
+end)
+
+---------------------
+---------------------
 -- Script Version Check / Script Auto Updater
 ---------------------
 ---------------------
@@ -439,6 +463,8 @@ local self <const> = menu.list(menu.my_root(), "Selbst", {}, "")
     menu.divider(self, "Athego's Script - Selbst")
 local online <const> = menu.list(menu.my_root(), "Online", {}, "")
     menu.divider(online, "Athego's Script - Online")
+local fahrzeuge <const> = menu.list(menu.my_root(), "Fahrzeuge", {}, "")
+    menu.divider(fahrzeuge, "Athego's Script - Fahrzeuge")
 local loadout <const> = menu.list(menu.my_root(), "Loadout", {}, "")
     menu.divider(loadout, "Athego's Script - Loadout")
 local sonstiges <const> = menu.list(menu.my_root(), "Sonstiges", {}, "")
@@ -449,6 +475,29 @@ local sonstiges <const> = menu.list(menu.my_root(), "Sonstiges", {}, "")
 -- Selbst
 ---------------------
 ---------------------
+
+menu.toggle_loop(self, "Beitretende Spiele Automatisch annehmen", {}, "Automatische Annahme der Beitrittsbildschirme", function()
+    local message_hash = HUD.GET_WARNING_SCREEN_MESSAGE_HASH()
+    if message_hash == 15890625 or message_hash == -398982408 or message_hash == -587688989 then
+        PAD.SET_CONTROL_VALUE_NEXT_FRAME(2, 201, 1.0)
+        util.yield(50)
+    end
+end)
+
+menu.toggle_loop(self, "Mors Mutual Insurance automatisiert", {}, "Holt automatisch die zerstörten Autos von Mors Mutual Insurance zurück", function()
+    local count = memory.read_int(memory.script_global(1585857))
+    for i = 0, count do
+        local canFix = (bitTest(memory.script_global(1585857 + 1 + (i * 142) + 103), 1) and bitTest(memory.script_global(1585857 + 1 + (i * 142) + 103), 2))
+        if canFix then
+            clearBit(memory.script_global(1585857 + 1 + (i * 142) + 103), 1)
+            clearBit(memory.script_global(1585857 + 1 + (i * 142) + 103), 3)
+            clearBit(memory.script_global(1585857 + 1 + (i * 142) + 103), 16)
+            util.toast(sprefix .. " Dein persönliches Fahrzeug wurde zerstört. Es wurde automatisch in Anspruch genommen.")
+            util.log(sprefix .. " Dein persönliches Fahrzeug wurde zerstört. Es wurde automatisch in Anspruch genommen.")
+        end
+    end
+    util.yield(100)
+end)
 
 menu.toggle(self, "Leiser Schritt", {}, "Entfernt die Geräusche die du beim gehen machst", function (toggle)
     AUDIO.SET_PED_FOOTSTEPS_EVENTS_ENABLED(players.user_ped(), not toggle)
@@ -515,7 +564,7 @@ end)
 ---------------------
 ---------------------
 
-menu.action(online, 'Schneeballschlacht', {}, 'Schenkt allen in der Lobby Schneebälle und benachrichtigt sie per SMS', function ()
+menu.action(online, 'Schneeballschlacht', {}, 'Gibt allen in der Lobby Schneebälle und benachrichtigt sie per SMS', function ()
     local plist = players.list()
     local snowballs = util.joaat('WEAPON_SNOWBALL')
     for i = 1, #plist do
@@ -526,6 +575,40 @@ menu.action(online, 'Schneeballschlacht', {}, 'Schenkt allen in der Lobby Schnee
         util.yield()
     end
 end)
+
+menu.action(online, 'Silvester', {}, 'Gibt allen in der Lobby Feuerwerkskörper und benachrichtigt sie per SMS', function ()
+    local plist = players.list()
+    local fireworks = util.joaat('weapon_firework')
+    for i = 1, #plist do
+        local plyr = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(plist[i])
+        WEAPON.GIVE_DELAYED_WEAPON_TO_PED(plyr, fireworks, 10, true)
+        WEAPON.SET_PED_AMMO(plyr, fireworks, 20)
+        players.send_sms(plist[i], playerid, 'Murica f*** ya! You now have Fireworks')
+        util.yield()
+    end
+end)
+
+menu.toggle_loop(online, 'Erhöhung der Kosatka Raketen Reichweite', {}, 'Du kannst sie jetzt überall auf der Karte verwenden', function ()
+    if util.is_session_started() then
+    memory.write_float(memory.script_global(262145 + 30176), 200000.0)
+    end
+end)
+
+---------------------
+---------------------
+-- Fahrzeuge
+---------------------
+---------------------
+
+
+
+---------------------
+---------------------
+-- Fahrzeuge/Lazer Space Docker
+---------------------
+---------------------
+
+
 
 ---------------------
 ---------------------
@@ -1050,7 +1133,7 @@ while true do
         while NETWORK.NETWORK_IS_IN_SESSION() == false or util.is_session_transition_active() do
             util.yield(1000)
         end
-        util.yield(1000)
+        util.yield(3000)
         -- people didn't like the long loading time, but weapons/attachments don't seem to properly get deleted and loaded directly on spawn. So we'll just wait for them to do their first step
 		spawnpos = players.get_position(players.user())
         repeat
