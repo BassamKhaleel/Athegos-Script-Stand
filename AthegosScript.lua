@@ -11,7 +11,7 @@ util.require_natives(1663599433)
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.7)                                            --Aktuelle Script Version
+sversion = tonumber(0.8)                                            --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -21,6 +21,148 @@ local objectInterface = memory.read_long(replayInterface + 0x0028)
 local pickupInterface = memory.read_long(replayInterface + 0x0020)
 local playerid = players.user()
 local requestModel = STREAMING.REQUEST_MODEL
+
+---------------------
+---------------------
+-- functions für Farhzeug Mods
+---------------------
+---------------------
+
+function Vmod(vmod, plate)
+    VEHICLE.SET_VEHICLE_FIXED(vmod)
+    for M=0, 49 do
+        local modn = VEHICLE.GET_NUM_VEHICLE_MODS(vmod, M)
+        VEHICLE.SET_VEHICLE_MOD(vmod, M, modn -1, false)
+        VEHICLE.SET_VEHICLE_NUMBER_PLATE_TEXT(vmod, plate)
+        VEHICLE.GET_VEHICLE_MOD_KIT(vmod, 0)
+        VEHICLE.SET_VEHICLE_MOD_KIT(vmod, 0)
+        VEHICLE.SET_VEHICLE_MOD(vmod, 14, 0)
+        VEHICLE.TOGGLE_VEHICLE_MOD(vmod, 22, true)
+        VEHICLE.TOGGLE_VEHICLE_MOD(vmod, 18, true)
+        VEHICLE.TOGGLE_VEHICLE_MOD(vmod, 20, true)
+        VEHICLE.SET_VEHICLE_TYRE_SMOKE_COLOR(vmod, 0, 0, 0)
+        VEHICLE.SET_VEHICLE_MAX_SPEED(vmod, 100)
+        VEHICLE.MODIFY_VEHICLE_TOP_SPEED(vmod, 40)
+        VEHICLE.SET_VEHICLE_BURNOUT(vmod, false)
+    end
+end
+
+function GetControl(vic, spec, pid)
+    if pid == playerid then
+        return
+    end    
+    if not players.exists(pid) then
+        util.stop_thread()
+    end
+    local tick = 0
+    NETWORK.NETWORK_REQUEST_CONTROL_OF_ENTITY(vic)
+    while not NETWORK.NETWORK_HAS_CONTROL_OF_ENTITY(vic) do
+        local nid = NETWORK.NETWORK_GET_NETWORK_ID_FROM_ENTITY(vic)
+        NETWORK.SET_NETWORK_ID_CAN_MIGRATE(nid, true)
+        NETWORK.NETWORK_REQUEST_CONTROL_OF_ENTITY(vic)
+        util.yield()
+        tick =  tick + 1
+        if tick > 10 then
+            if not NETWORK.NETWORK_HAS_CONTROL_OF_ENTITY(vic) then
+                util.toast(sprefix .. ' Konnte keine Kontrolle erlangen')
+                util.log(sprefix .. ' Konnte keine Kontrolle erlangen')
+                if not spec then
+                    Specoff(pid)
+                end
+                util.stop_thread()
+            end
+        
+        end
+    end
+
+
+end
+
+function Disbet(pid)
+    local targets = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+    local tar1 = ENTITY.GET_ENTITY_COORDS(targets, true)
+    local play = ENTITY.GET_ENTITY_COORDS(playerped, true)
+    local disbet = SYSTEM.VDIST2(play.x, play.y, play.z, tar1.x, tar1.y, tar1.z)
+    return disbet
+end
+
+function GetPlayVeh(pid, opt)
+
+    local pedm = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+    if not players.exists(pid) then
+        util.stop_thread()
+    end
+    local spec = menu.get_value(menu.ref_by_rel_path(menu.player_root(pid), "Spectate>Ninja Method"))
+    util.toast(sprefix .. ' Kontrolle über das Fahrzeug erhalten')
+    util.log(sprefix .. ' Kontrolle über das Fahrzeug erhalten')
+    if Disbet(pid) > 750000  then
+        Specon(pid)
+    if PED.IS_PED_IN_ANY_VEHICLE(pedm, true) then
+        opt()
+        if not spec then
+            Specoff(pid)
+        end
+        return
+    else
+        util.toast(sprefix .. ' Spieler ist nicht im Fahrzeug')
+        util.log(sprefix .. ' Spieler ist nicht im Fahrzeug')
+        Specoff(pid)
+    end
+    elseif Disbet(pid) < 750000 then
+        if PED.IS_PED_IN_ANY_VEHICLE(pedm, true) then
+            opt()
+            if not spec then
+                Specoff(pid)
+            end
+        return
+        end
+    else
+        util.toast(sprefix .. ' Spieler ist nicht im Fahrzeug')
+        util.log(sprefix .. ' Spieler ist nicht im Fahrzeug')
+    end
+end
+
+function Specon(pid)
+    menu.trigger_commands("spectate".. players.get_name(pid).. ' on')
+    util.yield(3000)
+end
+
+function Specoff(pid)
+    menu.trigger_commands("spectate".. players.get_name(pid).. ' off')
+end
+
+function Maxoutcar(pid)
+    local pedm = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+    local spec = menu.get_value(menu.ref_by_rel_path(menu.player_root(pid), "Spectate>Ninja Method"))
+    local vmod = PED.GET_VEHICLE_PED_IS_IN(pedm, false)
+    GetControl(vmod, spec, pid)
+     Vmod(vmod, "Enjoy")
+     VEHICLE.SET_VEHICLE_WHEEL_TYPE(vmod, math.random(0, 7))
+     VEHICLE.SET_VEHICLE_MOD(vmod, 23, math.random(-1, 50))
+     ENTITY.SET_ENTITY_INVINCIBLE(vmod, true)
+     util.toast(sprefix .. ' Fahrzeug vollständig geupgradet')
+     util.log(sprefix .. ' Fahrzeug vollständig geupgradet')
+end
+
+function Platechange(cusplate, pid)
+    local pedm = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+    local spec = menu.get_value(menu.ref_by_rel_path(menu.player_root(pid), "Spectate>Ninja Method"))
+    local vmod = PED.GET_VEHICLE_PED_IS_IN(pedm, false)
+    GetControl(vmod, spec, pid)
+    VEHICLE.SET_VEHICLE_NUMBER_PLATE_TEXT(vmod, cusplate)
+    util.toast(sprefix .. ' Nummernschild geändert')
+    util.log(sprefix .. ' Nummernschild geändert')
+end
+
+function Fixveh(pid)
+    local pedm = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+    local spec = menu.get_value(menu.ref_by_rel_path(menu.player_root(pid), "Spectate>Ninja Method"))
+    local vmod = PED.GET_VEHICLE_PED_IS_IN(pedm, false)
+    GetControl(vmod, spec, pid)
+    VEHICLE.SET_VEHICLE_FIXED(vmod)
+    util.toast(sprefix .. ' Fahrzeug repariert')
+    util.log(sprefix .. ' Fahrzeug repariert')
+end
 
 ---------------------
 ---------------------
@@ -476,6 +618,12 @@ local sonstiges <const> = menu.list(menu.my_root(), "Sonstiges", {}, "")
 ---------------------
 ---------------------
 
+---------------------
+---------------------
+-- Selbst
+---------------------
+---------------------
+
 menu.toggle_loop(self, "Beitretende Spiele Automatisch annehmen", {}, "Automatische Annahme der Beitrittsbildschirme", function()
     local message_hash = HUD.GET_WARNING_SCREEN_MESSAGE_HASH()
     if message_hash == 15890625 or message_hash == -398982408 or message_hash == -587688989 then
@@ -501,6 +649,12 @@ end)
 
 menu.toggle(self, "Leiser Schritt", {}, "Entfernt die Geräusche die du beim gehen machst", function (toggle)
     AUDIO.SET_PED_FOOTSTEPS_EVENTS_ENABLED(players.user_ped(), not toggle)
+end)
+
+menu.action(self, "Explodiere selbst", {}, "", function()
+	local pos = ENTITY.GET_ENTITY_COORDS(players.user_ped(), false)
+	pos.z = pos.z - 1.0
+	FIRE.ADD_OWNED_EXPLOSION(players.user_ped(), pos.x, pos.y, pos.z, 0, 1.0, true, false, 1.0)
 end)
 
 ---------------------
@@ -1015,12 +1169,33 @@ local function player(pid)
 
     ---------------------
     ---------------------
-    -- Spieler Liste/Anti Modder
+    -- Spieler Liste/Freundlich
     ---------------------
     ---------------------
 
     local friendly = menu.list(menu.player_root(pid), "Athego's Script: Freundlich", {}, "")
         menu.divider(friendly, "Freundlich")
+
+    ---------------------
+    ---------------------
+    -- Spieler Liste/Freundlich/Fahrzeug
+    ---------------------
+    ---------------------
+
+    local friendlyvehicle = menu.list(friendly, "Fahrzeug", {}, "")
+        menu.divider(friendlyvehicle, "Fahrzeug")
+
+    menu.action(friendlyvehicle, 'Fahrzeug komplett upgraden', {}, 'Upgradet sein Fahrzeug und erhöht die Geschwindigkeit (setzt jedes Mal zufällige Räder auf das Fahrzeug)', function ()
+        GetPlayVeh(pid,  function ()
+            Maxoutcar(pid)
+        end)
+     end, nil, nil, COMMANDPERM_FRIENDLY)
+
+    menu.text_input(friendlyvehicle, 'Nummernschild ändern', {"nschild"}, 'Ändert das Nummernschild mit einem individuellen Text', function (cusplate)
+        GetPlayVeh(pid,  function ()
+            Platechange(cusplate, pid)
+        end)
+    end)
 
     ---------------------
     ---------------------
