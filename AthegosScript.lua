@@ -11,7 +11,7 @@ util.require_natives(1663599433)
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.8)                                            --Aktuelle Script Version
+sversion = tonumber(0.9)                                            --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -24,9 +24,145 @@ local requestModel = STREAMING.REQUEST_MODEL
 
 ---------------------
 ---------------------
+-- functions für Entity Controll
+---------------------
+---------------------
+
+local function set_entity_face_entity(entity, target, usePitch)
+    local pos1 = ENTITY.GET_ENTITY_COORDS(entity, false)
+    local pos2 = ENTITY.GET_ENTITY_COORDS(target, false)
+    local rel = v3.new(pos2)
+    rel:sub(pos1)
+    local rot = rel:toRot()
+    if not usePitch then
+        ENTITY.SET_ENTITY_HEADING(entity, rot.z)
+    else
+        ENTITY.SET_ENTITY_ROTATION(entity, rot.x, rot.y, rot.z, 2, 0)
+    end
+end
+
+local function request_control_of_entity(ent)
+    if not NETWORK.NETWORK_HAS_CONTROL_OF_ENTITY(ent) and util.is_session_started() then
+        local netid = NETWORK.NETWORK_GET_NETWORK_ID_FROM_ENTITY(ent)
+        NETWORK.SET_NETWORK_ID_CAN_MIGRATE(netid, true)
+        local st_time = os.time()
+        while not NETWORK.NETWORK_HAS_CONTROL_OF_ENTITY(ent) do
+            -- intentionally silently fail, otherwise we are gonna spam the everloving shit out of the user
+            if os.time() - st_time >= 5 then
+                util.log("Failed to request entity control in 5 seconds (entity " .. ent .. ")")
+                break
+            end
+            NETWORK.NETWORK_REQUEST_CONTROL_OF_ENTITY(ent)
+            util.yield()
+        end
+    end
+end
+
+local function request_control_of_entity_once(ent)
+    if not NETWORK.NETWORK_HAS_CONTROL_OF_ENTITY(ent) and util.is_session_started() then
+        local netid = NETWORK.NETWORK_GET_NETWORK_ID_FROM_ENTITY(ent)
+        NETWORK.SET_NETWORK_ID_CAN_MIGRATE(netid, true)
+        NETWORK.NETWORK_REQUEST_CONTROL_OF_ENTITY(ent)
+    end
+end
+
+local function request_model_load(hash)
+    request_time = os.time()
+    if not STREAMING.IS_MODEL_VALID(hash) then
+        return
+    end
+    STREAMING.REQUEST_MODEL(hash)
+    while not STREAMING.HAS_MODEL_LOADED(hash) do
+        if os.time() - request_time >= 10 then
+            break
+        end
+        util.yield()
+    end
+end
+
+local function ram_ped_with(ped, vehicle, offset, sog)
+    request_model_load(vehicle)
+    local front = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(ped, 0.0, offset, 0.0)
+    local veh = entities.create_vehicle(vehicle, front, ENTITY.GET_ENTITY_HEADING(ped)+180)
+    set_entity_face_entity(veh, ped, true)
+    if ram_onground then
+        OBJECT.PLACE_OBJECT_ON_GROUND_PROPERLY(veh)
+    end
+    VEHICLE.SET_VEHICLE_ENGINE_ON(veh, true, true, true)
+    VEHICLE.SET_VEHICLE_FORWARD_SPEED(veh, 100.0)
+end
+
+function mod_uses(type, incr)
+    -- this func is a patch. every time the script loads, all the toggles load and set their state. in some cases this makes the _uses optimization negative and breaks things. this prevents that.
+    if incr < 0 and is_loading then
+        -- ignore if script is still loading
+        return
+    end
+    if type == "vehicle" then
+        if vehicle_uses <= 0 and incr < 0 then
+            return
+        end
+        vehicle_uses = vehicle_uses + incr
+    elseif type == "pickup" then
+        if pickup_uses <= 0 and incr < 0 then
+            return
+        end
+        pickup_uses = pickup_uses + incr
+    elseif type == "ped" then
+        if ped_uses <= 0 and incr < 0 then
+            return
+        end
+        ped_uses = ped_uses + incr
+    elseif type == "player" then
+        if player_uses <= 0 and incr < 0 then
+            return
+        end
+        player_uses = player_uses + incr
+    elseif type == "object" then
+        if object_uses <= 0 and incr < 0 then
+            return
+        end
+        object_uses = object_uses + incr
+    end
+end
+
+---------------------
+---------------------
 -- functions für Farhzeug Mods
 ---------------------
 ---------------------
+
+local function kick_from_veh(pid)
+    menu.trigger_commands("vehkick" .. players.get_name(pid))
+end
+
+local function npc_jack(target, nearest)
+    npc_jackthr = util.create_thread(function(thr)
+        local player_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(target)
+        local last_veh = PED.GET_VEHICLE_PED_IS_IN(player_ped, true)
+        kick_from_veh(target)
+        local st = os.time()
+        while not VEHICLE.IS_VEHICLE_SEAT_FREE(last_veh, -1) do 
+            if os.time() - st >= 10 then
+                notify(translations.failed_to_free_seat)
+                util.stop_thread()
+            end
+            util.yield()
+        end
+        local hash = 0x9C9EFFD8
+        request_model_load(hash)
+        local coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(player_ped, -2.0, 0.0, 0.0)
+        local ped = entities.create_ped(28, hash, coords, 30.0)
+        ENTITY.SET_ENTITY_INVINCIBLE(ped, true)
+        PED.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(ped, true)
+        PED.SET_PED_FLEE_ATTRIBUTES(ped, 0, false)
+        PED.SET_PED_COMBAT_ATTRIBUTES(ped, 46, true)
+        PED.SET_PED_INTO_VEHICLE(ped, last_veh, -1)
+        VEHICLE.SET_VEHICLE_ENGINE_ON(last_veh, true, true, false)
+        TASK.TASK_VEHICLE_DRIVE_TO_COORD(ped, last_veh, math.random(1000), math.random(1000), math.random(100), 100, 1, ENTITY.GET_ENTITY_MODEL(last_veh), 786996, 5, 0)
+        util.stop_thread()
+    end)
+end
 
 function Vmod(vmod, plate)
     VEHICLE.SET_VEHICLE_FIXED(vmod)
@@ -44,6 +180,19 @@ function Vmod(vmod, plate)
         VEHICLE.SET_VEHICLE_MAX_SPEED(vmod, 100)
         VEHICLE.MODIFY_VEHICLE_TOP_SPEED(vmod, 40)
         VEHICLE.SET_VEHICLE_BURNOUT(vmod, false)
+    end
+end
+
+local function tp_player_car_to_coords(pid, coord)
+    local name = players.get_name(pid)
+    local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
+    if car ~= 0 then
+        request_control_of_entity(car)
+        if NETWORK.NETWORK_HAS_CONTROL_OF_ENTITY(car) then
+            for i=1, 3 do
+                ENTITY.SET_ENTITY_COORDS_NO_OFFSET(car, coord['x'], coord['y'], coord['z'], false, false, false)
+            end
+        end
     end
 end
 
@@ -78,6 +227,34 @@ function GetControl(vic, spec, pid)
 
 end
 
+local function get_ground_z(coords)
+    local start_time = os.time()
+    while true do
+        if os.time() - start_time >= 5 then
+            util.log("Failed to get ground Z in 5 seconds.")
+            return nil
+        end
+        local success, est = util.get_ground_z(coords['x'], coords['y'], coords['z']+2000)
+        if success then
+            return est
+        end
+        util.yield()
+    end
+end
+
+local function get_waypoint_coords()
+    local coords = HUD.GET_BLIP_COORDS(HUD.GET_FIRST_BLIP_INFO_ID(8))
+    if coords['x'] == 0 and coords['y'] == 0 and coords['z'] == 0 then
+        return nil
+    else
+        local estimate = get_ground_z(coords)
+        if estimate then
+            coords['z'] = estimate
+        end
+        return coords
+    end
+end
+
 function Disbet(pid)
     local targets = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
     local tar1 = ENTITY.GET_ENTITY_COORDS(targets, true)
@@ -93,8 +270,8 @@ function GetPlayVeh(pid, opt)
         util.stop_thread()
     end
     local spec = menu.get_value(menu.ref_by_rel_path(menu.player_root(pid), "Spectate>Ninja Method"))
-    util.toast(sprefix .. ' Kontrolle über das Fahrzeug erhalten')
-    util.log(sprefix .. ' Kontrolle über das Fahrzeug erhalten')
+    util.toast(sprefix .. ' Versuche Kontrolle über das Fahrzeug zu erhalten')
+    util.log(sprefix .. ' Versuche Kontrolle über das Fahrzeug zu erhalten')
     if Disbet(pid) > 750000  then
         Specon(pid)
     if PED.IS_PED_IN_ANY_VEHICLE(pedm, true) then
@@ -162,6 +339,28 @@ function Fixveh(pid)
     VEHICLE.SET_VEHICLE_FIXED(vmod)
     util.toast(sprefix .. ' Fahrzeug repariert')
     util.log(sprefix .. ' Fahrzeug repariert')
+end
+
+function Accelveh( speed, pid)
+    local pedm = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+    local spec = menu.get_value(menu.ref_by_rel_path(menu.player_root(pid), "Spectate>Ninja Method"))
+    local vmod = PED.GET_VEHICLE_PED_IS_IN(pedm, false)
+    GetControl(vmod, spec, pid)
+    VEHICLE.SET_VEHICLE_FORWARD_SPEED(vmod, speed)
+    util.toast(sprefix .. ' Fahrzeug beschleunigt')
+    util.log(sprefix .. ' Fahrzeug beschleunigt')
+end
+
+function Stopveh(pid)
+    local pedm = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+    local spec = menu.get_value(menu.ref_by_rel_path(menu.player_root(pid), "Spectate>Ninja Method"))
+    local vmod = PED.GET_VEHICLE_PED_IS_IN(pedm, false)
+    GetControl(vmod, spec, pid)
+    VEHICLE.SET_VEHICLE_FORWARD_SPEED(vmod, -1000)
+    ENTITY.SET_ENTITY_VELOCITY(vmod, 0, 0, 0)
+    VEHICLE.SET_VEHICLE_ENGINE_ON(vmod, false, false, false)
+    util.toast(sprefix .. ' Fahrzeug abbremsen')
+    util.log(sprefix .. ' Fahrzeug abbremsen')
 end
 
 ---------------------
@@ -683,12 +882,108 @@ menu.toggle_loop(detections, "Godmode", {}, "Erkennt ob jemand Godmode benutzt",
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         local pos = ENTITY.GET_ENTITY_COORDS(ped, false)
         for i, interior in ipairs(interior_stuff) do
-            if (players.is_godmode(pid) or not ENTITY.GET_ENTITY_CAN_BE_DAMAGED(ped)) and not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped) and get_transition_state(pid) == 99 and get_interior_player_is_in(pid) == interior then
-                util.draw_debug_text("[Athego's Script] " .. players.get_name(pid) .. " benutzt Godmode")
+            if players.is_godmode(pid) and (not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped)) and get_transition_state(pid) == 99 and get_interior_player_is_in(pid) == interior then
                 util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt Godmode")
                 util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt Godmode")
                 break
             end
+        end
+    end
+end)
+
+menu.toggle_loop(detections, "Fahrzeug Godmode", {}, "Erkennt ob jemand Fahrzeug Godmode benutzt", function()
+    for _, pid in ipairs(players.list(false, true, true)) do
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local pos = ENTITY.GET_ENTITY_COORDS(ped, false)
+        local player_veh = PED.GET_VEHICLE_PED_IS_USING(ped)
+        if PED.IS_PED_IN_ANY_VEHICLE(ped, false) then
+            for i, interior in ipairs(interior_stuff) do
+                if not ENTITY.GET_ENTITY_CAN_BE_DAMAGED(player_veh) and (not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped)) and get_transition_state(pid) == 99 and get_interior_player_is_in(pid) == interior then
+                    util.draw_debug_text(sprefix .. " " .. players.get_name(pid) .. " benutzt Vehicle Godmode")
+                    util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt Vehicle Godmode")
+                    util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt Vehicle Godmode")
+                    break
+                end
+            end
+        end
+    end
+end)
+
+menu.toggle_loop(detections, "Nicht veröffentliches Fahrzeug", {}, "Erkennt ob jemand ein Fahrzeug benutzt welches noch nicht veröffentlicht wurde", function()
+    for _, pid in ipairs(players.list(false, true, true)) do
+        local modelHash = players.get_vehicle_model(pid)
+        for i, name in ipairs(unreleased_vehicles) do
+            if modelHash == util.joaat(name) then
+                util.toast(sprefix .. " " .. players.get_name(pid) .. " fährt ein unveröffentliches Fahrzeug " .. "(" .. name .. ")")
+                util.log(sprefix .. " " .. players.get_name(pid) .. " fährt ein unveröffentliches Fahrzeug " .. "(" .. name .. ")")
+            end
+        end
+    end
+end)
+
+menu.toggle_loop(detections, "Gemoddete Waffe", {}, "Erkennt ob jemand eine Waffe benutzt die man Online nicht haben kann.", function()
+    for _, pid in ipairs(players.list(false, true, true)) do
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        for i, hash in ipairs(modded_weapons) do
+            local weapon_hash = util.joaat(hash)
+            if WEAPON.HAS_PED_GOT_WEAPON(ped, weapon_hash, false) and (WEAPON.IS_PED_ARMED(ped, 7) or TASK.GET_IS_TASK_ACTIVE(ped, 8) or TASK.GET_IS_TASK_ACTIVE(ped, 9)) then
+                util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt eine Gemoddete Waffe " .. "(" .. hash .. ")")
+                util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt eine Gemoddete Waffe " .. "(" .. hash .. ")")
+                break
+            end
+        end
+    end
+end)
+
+menu.toggle_loop(detections, "Gemoddetes Fahrzeug", {}, "Erkennt ob jemand ein Gemoddetes Fahrzeug benutzt", function()
+    for _, pid in ipairs(players.list(false, true, true)) do
+        local modelHash = players.get_vehicle_model(pid)
+        for i, name in ipairs(modded_vehicles) do
+            if modelHash == util.joaat(name) then
+                util.toast(sprefix .. " " .. players.get_name(pid) .. " fährt ein gemoddetes Fahrzeug " .. "(" .. name .. ")")
+                util.log(sprefix .. " " .. players.get_name(pid) .. " fährt ein gemoddetes Fahrzeug " .. "(" .. name .. ")")
+                break
+            end
+        end
+    end
+end)
+
+-- menu.toggle_loop(detections, "Noclip", {}, "Erkennt ob Spieler Noclip benutzten bzw Levitation", function()
+--     for _, pid in ipairs(players.list(false, true, true)) do
+--         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+--         local ped_ptr = entities.handle_to_pointer(ped)
+--         local vehicle = PED.GET_VEHICLE_PED_IS_USING(ped)
+--         local oldpos = players.get_position(pid)
+--         util.yield()
+--         local currentpos = players.get_position(pid)
+--         local vel = ENTITY.GET_ENTITY_VELOCITY(ped)
+--         if not util.is_session_transition_active() and players.exists(pid)
+--         and get_interior_player_is_in(pid) == 0 and get_transition_state(pid) ~= 0
+--         and not PED.IS_PED_IN_ANY_VEHICLE(ped, false) -- too many false positives occured when players where driving. so fuck them. lol.
+--         and not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped) and not PED.IS_PED_DEAD_OR_DYING(ped)
+--         and not PED.IS_PED_CLIMBING(ped) and not PED.IS_PED_VAULTING(ped) and not PED.IS_PED_USING_SCENARIO(ped)
+--         and not TASK.GET_IS_TASK_ACTIVE(ped, 160) and not TASK.GET_IS_TASK_ACTIVE(ped, 2)
+--         and v3.distance(ENTITY.GET_ENTITY_COORDS(players.user_ped(), false), players.get_position(pid)) <= 395.0 -- 400 was causing false positives
+--         and ENTITY.GET_ENTITY_HEIGHT_ABOVE_GROUND(ped) > 5.0 and not ENTITY.IS_ENTITY_IN_AIR(ped) and entities.player_info_get_game_state(ped_ptr) == 0
+--         and oldpos.x ~= currentpos.x and oldpos.y ~= currentpos.y and oldpos.z ~= currentpos.z 
+--         and vel.x == 0.0 and vel.y == 0.0 and vel.z == 0.0 then
+--             util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt Noclip!")
+--             util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt Noclip!")
+--             break
+--         end
+--     end
+-- end)
+
+menu.toggle_loop(detections, "Super Drive", {}, "Erkennt ob jemand Super Drive benutzt.", function()
+    for _, pid in ipairs(players.list(false, true, true)) do
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local vehicle = PED.GET_VEHICLE_PED_IS_USING(ped)
+        local veh_speed = (ENTITY.GET_ENTITY_SPEED(vehicle)* 2.236936)
+        local class = VEHICLE.GET_VEHICLE_CLASS(vehicle)
+        if class ~= 15 and class ~= 16 and veh_speed >= 200 and VEHICLE.GET_PED_IN_VEHICLE_SEAT(vehicle, -1) and (players.get_vehicle_model(pid) ~= util.joaat("oppressor") or players.get_vehicle_model(pid) ~= util.joaat("oppressor2")) then
+            util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt Super Drive")
+            util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt Super Drive")
+            break
         end
     end
 end)
@@ -710,6 +1005,19 @@ end)
 homophobie_beenden = false
 menu.toggle(protections, "Homophobie beenden", {}, "Kickt Homophobe Spieler", function(on)
     homophobie_beenden = on
+end)
+
+menu.toggle_loop(protections, "Anti-Beast", {}, "Verhindert, dass du in die Bestie verwandelt wirst, hält aber auch das Ereignis für andere auf.", function()
+    if SCRIPT.GET_NUMBER_OF_THREADS_RUNNING_THE_SCRIPT_WITH_THIS_HASH(util.joaat("am_hunt_the_beast")) > 0 then
+        local host
+        repeat
+            host = NETWORK.NETWORK_GET_HOST_OF_SCRIPT("am_hunt_the_beast", -1, 0)
+            util.yield()
+        until host ~= -1
+        util.toast(sprefix .. " " .. players.get_name(host) .. " hat Hunt The Beast gestartet. Beende es...")
+        util.log(sprefix .. " " .. players.get_name(host) .. " hat Hunt The Beast gestartet. Beende es...")
+        menu.trigger_command(menu.ref_by_path("Online>Session>Session Scripts>Hunt the Beast>Stop Script"))
+    end
 end)
 
 ---------------------
@@ -746,6 +1054,18 @@ menu.toggle_loop(online, 'Erhöhung der Kosatka Raketen Reichweite', {}, 'Du kan
     if util.is_session_started() then
     memory.write_float(memory.script_global(262145 + 30176), 200000.0)
     end
+end)
+
+menu.toggle_loop(online, "Kopfgeld automatisch entfernen", {}, "", function()
+    if util.is_session_started() then
+        if memory.read_int(memory.script_global(1835502 + 4 + 1 + (players.user() * 3))) == 1 then
+            memory.write_int(memory.script_global(2815059 + 1856 + 17), -1)
+            memory.write_int(memory.script_global(2359296 + 1 + 5149 + 13), 2880000)
+            util.toast(sprefix .. " Removed bounty of: $" ..memory.read_int(memory.script_global(1835502 + 4 + 1 + (players.user() * 3) + 1)).. " ")
+            util.log(sprefix .. " Removed bounty of: $" ..memory.read_int(memory.script_global(1835502 + 4 + 1 + (players.user() * 3) + 1)).. " ")
+        end
+    end
+    util.yield(5000)
 end)
 
 ---------------------
@@ -1176,6 +1496,34 @@ local function player(pid)
     local friendly = menu.list(menu.player_root(pid), "Athego's Script: Freundlich", {}, "")
         menu.divider(friendly, "Freundlich")
 
+    local firw = {speed = 1000}
+    menu.toggle_loop(friendly, 'Feuerwerkshow', {'feuerw'}, 'Zünde ein Feuerwerk am Standort des Spielers', function ()
+        local targets = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local tar1 = ENTITY.GET_ENTITY_COORDS(targets, true)
+        local weap = util.joaat('weapon_firework')
+        WEAPON.REQUEST_WEAPON_ASSET(weap)
+        FIRE.ADD_EXPLOSION(tar1.x, tar1.y, tar1.z + math.random(50, 75), 38, 1, false, false, 0, false)
+        FIRE.ADD_EXPLOSION(tar1.x + math.random(-50, 50), tar1.y, tar1.z + math.random(50, 75), 38, 1, false, false, 0, false)
+        FIRE.ADD_EXPLOSION(tar1.x, tar1.y + math.random(-50, 50), tar1.z + math.random(50, 75), 38, 1, false, false, 0, false)
+        FIRE.ADD_EXPLOSION(tar1.x + math.random(-50, 50), tar1.y + math.random(-50, 50), tar1.z + math.random(50, 75), 38, 1, false, false, 0, false)
+        FIRE.ADD_EXPLOSION(tar1.x - math.random(-50, 50), tar1.y, tar1.z + math.random(50, 75), 38, 1, false, false, 0, false)
+        FIRE.ADD_EXPLOSION(tar1.x, tar1.y - math.random(-50, 50), tar1.z + math.random(50, 75), 38, 1, false, false, 0, false)
+        FIRE.ADD_EXPLOSION(tar1.x - math.random(-50, 50), tar1.y - math.random(-50, 50), tar1.z + math.random(50, 75), 38, 1, false, false, 0, false)
+        FIRE.ADD_EXPLOSION(tar1.x - math.random(-50, 50), tar1.y + math.random(-50, 50), tar1.z + math.random(50, 75), 38, 1, false, false, 0, false)
+        FIRE.ADD_EXPLOSION(tar1.x + math.random(-50, 50), tar1.y - math.random(-50, 50), tar1.z + math.random(50, 75), 38, 1, false, false, 0, false)
+        MISC.SHOOT_SINGLE_BULLET_BETWEEN_COORDS(tar1.x, tar1.y, tar1.z + 4.0, tar1.x, tar1.y, tar1.z + math.random(10, 15), 200, 0, weap, 0, false, true, firw.speed)
+        MISC.SHOOT_SINGLE_BULLET_BETWEEN_COORDS(tar1.x, tar1.y, tar1.z + 4.0, tar1.x + math.random(-50, 50), tar1.y, tar1.z + math.random(10, 15), 200, 0, weap, 0, false, false, firw.speed)
+        MISC.SHOOT_SINGLE_BULLET_BETWEEN_COORDS(tar1.x, tar1.y, tar1.z + 4.0, tar1.x , tar1.y + math.random(-50, 50), tar1.z + math.random(10, 15), 200, 0, weap, 0, false, false, firw.speed)
+        MISC.SHOOT_SINGLE_BULLET_BETWEEN_COORDS(tar1.x, tar1.y, tar1.z + 4.0, tar1.x + math.random(-50, 50), tar1.y, tar1.z + math.random(10, 15), 200, 0, weap, 0, false, false, firw.speed)
+        MISC.SHOOT_SINGLE_BULLET_BETWEEN_COORDS(tar1.x, tar1.y, tar1.z + 4.0, tar1.x + math.random(-50, 50), tar1.y + math.random(-50, 50), tar1.z + math.random(10, 15), 200, 0, weap, 0, false, false, firw.speed)
+        MISC.SHOOT_SINGLE_BULLET_BETWEEN_COORDS(tar1.x, tar1.y, tar1.z + 4.0, tar1.x - math.random(-50, 50), tar1.y, tar1.z + math.random(10, 15), 200, 0, weap, 0, false, false, firw.speed)
+        MISC.SHOOT_SINGLE_BULLET_BETWEEN_COORDS(tar1.x, tar1.y, tar1.z + 4.0, tar1.x , tar1.y - math.random(-50, 50), tar1.z + math.random(10, 15), 200, 0, weap, 0, false, false, firw.speed)
+        MISC.SHOOT_SINGLE_BULLET_BETWEEN_COORDS(tar1.x, tar1.y, tar1.z + 4.0, tar1.x - math.random(-50, 50), tar1.y - math.random(-50, 50), tar1.z + math.random(10, 15), 200, 0, weap, 0, false, false, firw.speed)
+        if not players.exists(pid) then
+            util.stop_thread()
+        end
+    end)
+
     ---------------------
     ---------------------
     -- Spieler Liste/Freundlich/Fahrzeug
@@ -1185,17 +1533,461 @@ local function player(pid)
     local friendlyvehicle = menu.list(friendly, "Fahrzeug", {}, "")
         menu.divider(friendlyvehicle, "Fahrzeug")
 
-    menu.action(friendlyvehicle, 'Fahrzeug komplett upgraden', {}, 'Upgradet sein Fahrzeug und erhöht die Geschwindigkeit (setzt jedes Mal zufällige Räder auf das Fahrzeug)', function ()
+    menu.action(friendlyvehicle, 'Fahrzeug komplett upgraden', {}, 'Upgradet sein Fahrzeug und erhöht die Geschwindigkeit (setzt jedes Mal zufällige Räder auf das Fahrzeug)', function()
         GetPlayVeh(pid,  function ()
             Maxoutcar(pid)
         end)
-     end, nil, nil, COMMANDPERM_FRIENDLY)
+    end, nil, nil, COMMANDPERM_FRIENDLY)
 
-    menu.text_input(friendlyvehicle, 'Nummernschild ändern', {"nschild"}, 'Ändert das Nummernschild mit einem individuellen Text', function (cusplate)
+    menu.action(friendlyvehicle, "Fahrzeug Godmode", {}, "Gibt dem Fahrzeug Godmode", function(click_type)
+        local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
+        if car ~= 0 then
+            request_control_of_entity(car)
+            ENTITY.SET_ENTITY_INVINCIBLE(car, true)
+            VEHICLE.SET_VEHICLE_CAN_BE_VISIBLY_DAMAGED(car, false)
+        end
+    end)
+
+    menu.text_input(friendlyvehicle, 'Nummernschild ändern', {"nschild"}, 'Ändert das Nummernschild mit einem individuellen Text', function(cusplate)
         GetPlayVeh(pid,  function ()
             Platechange(cusplate, pid)
         end)
     end)
+
+    menu.action(friendlyvehicle, 'Fahrzeug repaieren', {}, 'Repariert sein Fahrzeug', function()
+        GetPlayVeh(pid,  function ()
+            Fixveh(pid)
+        end)
+    end, nil, nil, COMMANDPERM_FRIENDLY)
+
+    menu.action(friendlyvehicle, "Entferne Haftbomben vom Fahrzeug", {}, "", function(click_type)
+        local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
+        NETWORK.REMOVE_ALL_STICKY_BOMBS_FROM_ENTITY(car)
+    end)
+
+    menu.click_slider(friendlyvehicle, 'Fahrzeug beschleunigen', {}, 'Beschleunige das Fahrzeug vorwärts um den eingestellten Wert (die tatsächliche Geschwindigkeit ist etwa doppelt so hoch wie die Zahl in km/h)', 10, 150, 40, 10, function (s)
+        local  speed = s
+         GetPlayVeh(pid, function ()
+            Accelveh( speed, pid)
+            util.yield(1000)
+         end)
+    end)
+
+    menu.click_slider(friendlyvehicle, "Höchstgeschwindigkeit", {}, "", -10000, 10000, 200, 100, function(s)
+        local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
+        if car ~= 0 then
+            request_control_of_entity(car)
+            VEHICLE.MODIFY_VEHICLE_TOP_SPEED(car, s)
+            ENTITY.SET_ENTITY_MAX_SPEED(car, s)
+        end
+    end)
+
+    ---------------------
+    ---------------------
+    -- Spieler Liste/Trolling
+    ---------------------
+    ---------------------
+
+    local playertroll = menu.list(menu.player_root(pid), "Athego's Script: Trolling", {}, "")
+        menu.divider(playertroll, "Trolling")
+
+
+    ---------------------
+    ---------------------
+    -- Spieler Liste/Trolling/Explosionen
+    ---------------------
+    ---------------------
+
+    local playertrollexplo = menu.list(playertroll, "Explosionen", {}, "")
+        menu.divider(playertrollexplo, "Explosionen")
+
+    local explo_types = {13, 12, 70}
+    local e_type = 13
+    local explo_options = {"Wasser", "Feuer", "Launch"}
+    local explo_type_slider = menu.list_action(playertrollexplo, "Explosion's Typ", {}, "", explo_options, function(index, value, click_type)
+        local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local coords = ENTITY.GET_ENTITY_COORDS(target_ped, false)
+        e_type = explo_types[index]
+        FIRE.ADD_EXPLOSION(coords['x'], coords['y'], coords['z'], e_type, 100.0, true, false, 0.0)
+    end)
+
+    menu.toggle_loop(playertrollexplo, "Unendliche Explosionen", {}, "Lässt den Spieler dauerhaft explodieren", function(on)
+        local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local coords = ENTITY.GET_ENTITY_COORDS(target_ped)
+        FIRE.ADD_EXPLOSION(coords['x'], coords['y'], coords['z'], e_type, 1.0, true, false, 0.0)
+    end)
+
+    menu.toggle_loop(playertrollexplo, "Zufällige Explosionen", {}, "", function(on)
+        local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local coords = ENTITY.GET_ENTITY_COORDS(target_ped)
+        FIRE.ADD_EXPLOSION(coords['x'], coords['y'], coords['z'], math.random(0, 82), 1.0, true, false, 0.0)
+    end)
+
+    ---------------------
+    ---------------------
+    -- Spieler Liste/Trolling/Fahrezug
+    ---------------------
+    ---------------------
+
+    local playertrollfahrzeug = menu.list(playertroll, "Fahrzeug", {}, "")
+        menu.divider(playertrollfahrzeug, "Fahrzeug")
+
+    local tp_options = {"Zu mir", "Wegpunkt", "Maze Bank", "Unterwasser", "Hoch oben", "LSC", "SCP-173", "Große Zelle", "Luxus-Autos Austellung", "Unterwasser, und schließ die Türen ab"}
+    menu.list_action(playertrollfahrzeug, "Teleportieren", {}, "", tp_options, function(index, value, click_type)
+        local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
+        if car ~= 0 then
+            local c = {}
+            pluto_switch index do
+                case 1:
+                    c = players.get_position(players.user())
+                    break
+                case 2: 
+                    c = get_waypoint_coords()
+                    break
+                case 3:
+                    c.x = -75.261375
+                    c.y = -818.674
+                    c.z = 326.17517
+                    break
+                case 4: 
+                    c.x = 4497.2207
+                    c.y = 8028.3086
+                    c.z = -32.635174
+                    break
+                case 5: 
+                    c.x = 0.0
+                    c.y = 0.0
+                    c.z = 2000
+                    break
+                case 6: 
+                    c.x = -353.84512
+                    c.y = -135.59108
+                    c.z = 39.009624
+                    break
+                case 7: 
+                    c.x = 1642.8401
+                    c.y = 2570.7695
+                    c.z = 45.564854
+                    break
+                case 8:
+                    c.x = 1737.1896
+                    c.y = 2634.897
+                    c.z = 45.56497
+                    break
+                case 9: 
+                    c.x = -787.4092
+                    c.y = -239.00093
+                    c.z = 37.734055
+                    break
+                case 10: 
+                    menu.set_value(childlock, true)
+                    c.x = 4497.2207
+                    c.y = 8028.3086
+                    c.z = -32.635174
+                    break
+            end
+            request_control_of_entity(car)
+            tp_player_car_to_coords(pid, c)
+        end
+    end)
+
+    menu.toggle(playertrollfahrzeug, 'Dauerhafter Burnout', {}, 'Sein Auto macht dauerhaft Burnouts', function(toggle)
+        local pedm = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        if PED.IS_PED_IN_ANY_VEHICLE(pedm, true) then
+            local playerVehicle = PED.GET_VEHICLE_PED_IS_IN(pedm, false)
+            NETWORK.NETWORK_REQUEST_CONTROL_OF_ENTITY(playerVehicle)
+            VEHICLE.SET_VEHICLE_BURNOUT(playerVehicle, toggle)
+        end
+    end)
+
+    local fahrzeughealth_optionen = {"Zerstören", "Reparieren"}
+    menu.list_action(playertrollfahrzeug, "Zustand", {},  "Es kann passieren das die Zerstörung unumkehrbar ist. So funktioniert das Spiel nun mal", fahrzeughealth_optionen, function(index, value, click_type)
+        local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
+        if car ~= 0 then
+            request_control_of_entity(car)
+            VEHICLE.SET_VEHICLE_ENGINE_HEALTH(car, if index == 1 then -4000.0 else 10000.0)
+            VEHICLE.SET_VEHICLE_BODY_HEALTH(car, if index == 1 then -4000.0 else 10000.0)
+            if index == 2 then
+                VEHICLE.SET_VEHICLE_FIXED(car)
+            end
+        end
+    end)
+
+    menu.action(playertrollfahrzeug, "YEET", {}, "", function(click_type)
+        local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
+        if car ~= 0 then
+            request_control_of_entity(car)
+            ENTITY.SET_ENTITY_MAX_SPEED(car, 10000000.0)
+            ENTITY.APPLY_FORCE_TO_ENTITY(car, 1,  0.0, 0.0, 10000000, 0, 0, 0, 0, true, false, true, false, true)
+        end
+    end)
+
+    kindersicherung = menu.toggle_loop(playertrollfahrzeug, "Kindersicherung", {}, "", function()
+        local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
+        if car ~= 0 then
+            VEHICLE.SET_VEHICLE_DOORS_LOCKED(car, 4)
+        end
+    end, function()
+        if car ~= 0 then
+            VEHICLE.SET_VEHICLE_DOORS_LOCKED(car, 1)
+        end
+    end)
+
+    local door_options = {"Offen", "Geschlossen", "Kaputt"}
+    menu.list_action(playertrollfahrzeug, "Tür Kontrolle", {}, "", door_options, function(index, value, click_type)
+        local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
+        if car ~= 0 then
+            request_control_of_entity(car)
+            local d = VEHICLE.GET_NUMBER_OF_VEHICLE_DOORS(car)
+            for i=0, d do
+                pluto_switch index do
+                    case 1: 
+                        VEHICLE.SET_VEHICLE_DOOR_OPEN(car, i, false, true)
+                        break
+                    case 2:
+                        VEHICLE.SET_VEHICLE_DOOR_SHUT(car, i, true)
+                        break
+                    case 3:
+                        VEHICLE.SET_VEHICLE_DOOR_BROKEN(car, i, false)
+                        break
+                end
+            end
+        end
+    end)
+
+    menu.toggle(playertrollfahrzeug, "Handbremse", {}, "Stellt die Handbremse des Auto's fest", function(on)
+        local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
+        if car ~= 0 then
+            request_control_of_entity(car)
+            VEHICLE.SET_VEHICLE_HANDBRAKE(car, on)
+        end
+    end)
+
+    menu.toggle_loop(playertrollfahrzeug, "Zufälliges Bremsen", {}, "Anscheinend sind die Bremsen kaputt oder warum Bremst das Auto zufällig?", function(on)
+        local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
+        if car ~= 0 then
+            request_control_of_entity(car)
+            VEHICLE.SET_VEHICLE_HANDBRAKE(car, true)
+            util.yield(1000)
+            request_control_of_entity(car)
+            VEHICLE.SET_VEHICLE_HANDBRAKE(car, false)
+            util.yield(math.random(3000, 15000))
+        end
+    end)
+
+    menu.toggle_loop(playertrollfahrzeug, "Beyblade", {}, "You spin me right round, baby right round like a record, baby Right round, round round", function(on)
+        local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
+        if car ~= 0 then
+            request_control_of_entity_once(car)
+            ENTITY.APPLY_FORCE_TO_ENTITY_CENTER_OF_MASS(car, 4, 0.0, 0.0, 300.0, 0, true, true, false, true, true, true)
+        end
+    end)
+
+    menu.action(playertrollfahrzeug, "Einmal wenden bitte", {}, "Lässt das Fahrzeug in die andere Richtung Fahren", function(on)
+        local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
+        if car ~= 0 then
+            request_control_of_entity(car)
+            local rot = ENTITY.GET_ENTITY_ROTATION(car, 0)
+            local vel = ENTITY.GET_ENTITY_VELOCITY(car)
+            ENTITY.SET_ENTITY_ROTATION(car, rot['x'], rot['y'], rot['z']+180, 0, true)
+            ENTITY.SET_ENTITY_VELOCITY(car, -vel['x'], -vel['y'], vel['z'])
+        end
+    end)
+
+    menu.action(playertrollfahrzeug, "Fahrzeug umdrehen", {}, "Dreht das Fahrzeug auf den Kopf", function(on)
+        local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
+        if car ~= 0 then
+            request_control_of_entity(car)
+            local rot = ENTITY.GET_ENTITY_ROTATION(car, 0)
+            local vel = ENTITY.GET_ENTITY_VELOCITY(car)
+            ENTITY.SET_ENTITY_ROTATION(car, rot['x'], rot['y']+180, rot['z'], 0, true)
+            ENTITY.SET_ENTITY_VELOCITY(car, -vel['x'], -vel['y'], vel['z'])
+        end
+    end)
+
+    menu.action(playertrollfahrzeug, "Motor ausschalten", {}, "", function(on)
+        local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
+        if car ~= 0 then
+            request_control_of_entity(car)
+            VEHICLE.SET_VEHICLE_ENGINE_ON(car, false, true, false)
+        end
+    end)
+
+    menu.action(playertrollfahrzeug, "EMP", {}, "Schaltet durch eine EMP Bombe die Elektronik in dem Fahrzeug aus", function(on)
+        local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
+        if car ~= 0 then
+            local c = ENTITY.GET_ENTITY_COORDS(car)
+            FIRE.ADD_EXPLOSION(c.x, c.y, c.z, 83, 100.0, false, true, 0.0)
+        end
+    end)
+
+    ---------------------
+    ---------------------
+    -- Spieler Liste/Trolling/NPC's
+    ---------------------
+    ---------------------
+
+    local playertrollnpc = menu.list(playertroll, "NPC Trolling", {}, "")
+        menu.divider(playertrollnpc, "NPC Trolling")
+
+    menu.action(playertrollnpc, "Letztes Auto klauen", {}, "Schickt einen NPC der das Fahrzeug klaut", function(click_type)
+        npc_jack(pid, false)
+    end)
+
+    local kidnap_types = {"LKW", "Helikopter"}
+    menu.list_action(playertrollnpc, "Entführen", {}, "Spawnt ein Fahrzeug in dem der Spieler feststeckt und fährt mit ihm rum", kidnap_types, function(index, value)
+        local p_hash = util.joaat("s_m_y_factory_01")
+        local v_hash = 0
+        pluto_switch index do 
+            case 1:
+                v_hash = util.joaat("boxville3")
+                break 
+            case 2:
+                v_hash = util.joaat("cargobob")
+                break
+        end
+        local user_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        request_model_load(v_hash)
+        request_model_load(p_hash)
+        local c = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(user_ped, 0.0, 2.0, 0.0)
+        local truck = entities.create_vehicle(v_hash, c, ENTITY.GET_ENTITY_HEADING(user_ped))
+        local driver = entities.create_ped(5, p_hash, c, 0)
+        PED.SET_PED_INTO_VEHICLE(driver, truck, -1)
+        PED.SET_PED_FLEE_ATTRIBUTES(driver, 0, false)
+        ENTITY.SET_ENTITY_INVINCIBLE(driver, true)
+        ENTITY.SET_ENTITY_INVINCIBLE(truck, true)
+        request_model_load(prop_hash)
+        PED.SET_PED_CAN_BE_DRAGGED_OUT(driver, false)
+        PED.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(driver, true)
+        util.yield(2000)
+        if index == 1 then
+            TASK.TASK_VEHICLE_DRIVE_TO_COORD(driver, truck, math.random(1000), math.random(1000), math.random(100), 100, 1, ENTITY.GET_ENTITY_MODEL(truck), 786996, 5, 0)
+        elseif index == 2 then 
+            TASK.TASK_HELI_MISSION(driver, truck, 0, 0, math.random(1000), math.random(1000), 1500, 4, 200.0, 0.0, 0, 100, 1000, 0.0, 16)
+        end
+    end)
+
+    ---------------------
+    ---------------------
+    -- Spieler Liste/Trolling/Chat troll
+    ---------------------
+    ---------------------
+
+    local playertrollchat = menu.list(playertroll, "Chat Trolling", {}, "")
+        menu.divider(playertrollchat, "Chat Trolling")
+
+    menu.action(playertrollchat, "Schizo-Nachricht senden", {"schizo"}, "Sendet ihnen eine Chat-Nachricht, die normal aussieht, aber nur sie selbst sehen können. Lässt sie schizophren aussehen, wenn sie antworten", function(click_type)
+        util.show_corner_help(sprefix .. " Bitte gib die Nachricht ein")
+        menu.show_command_box("schizo" .. players.get_name(pid) .. " ")
+        end, function(on_command)
+            if #on_command > 140 then
+                util.toast(sprefix .. " Die Nachricht ist zu lang")
+            else
+                chat.send_targeted_message(pid, players.user(), on_command, false)
+                util.toast(sprefix .. " Nachricht gesendet!")
+            end
+    end)
+
+    menu.action(playertrollchat, "Falsche RAC Erkennung", {"fakerac"}, "Der Benutzer hat eine Erkennung ausgelöst: Rockstar Anti Cheat", function(click_type)
+        local types = {'I3', 'C1'}
+        local det_type = types[math.random(1, #types)]
+        chat.send_message('> ' .. players.get_name(pid) .. " triggered a detection: Rockstar Anti Cheat (" .. det_type .. ")", false, true, true)
+    end)
+
+    menu.action(playertrollchat, "Falsche Knockoff Breakup Erkennung", {}, "", function(click_type)
+        chat.send_message("> Knockoff Breakup Kick from " .. players.get_name(pid) .. " against " .. players.get_name(players.user()), false, true, true)
+    end)
+
+    ---------------------
+    ---------------------
+    -- Spieler Liste/Trolling/SMS troll
+    ---------------------
+    ---------------------
+
+    local playertrollsms = menu.list(playertroll, "SMS Trolling", {}, "")
+        menu.divider(playertrollsms, "SMS Trolling")
+
+    ---------------------
+    ---------------------
+    -- Spieler Liste/Trolling/Ram
+    ---------------------
+    ---------------------
+
+    local playertrollram = menu.list(playertroll, "Spieler Rammen", {}, "")
+        menu.divider(playertrollram, "Spieler Rammen")
+
+    local ram_car = "brickade"
+    menu.text_input(playertrollram, "Eigenes Fahrzeug", {"brickade"}, "Eingabe eines benutzerdefinierten Modells, mit dem der Spieler gerammt werden soll", function(on_input)
+        ram_car = on_input
+    end, "brickade")
+
+    local ram_hashes = {-1007528109, -2103821244, 368211810, -1649536104}
+    local ram_options = {"Howard", "Rally Truck", "Transportflugzeug", "Phantom Wedge", "Benutzerdefiniert"}
+    menu.list_action(playertrollram, "Rammen mit", {}, "", ram_options, function(index, value, click_type)
+        if value ~= "Benutzerdefiniert" then
+            ram_ped_with(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), ram_hashes[index], math.random(5, 15))
+        else
+            ram_ped_with(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), util.joaat(ram_car), math.random(5, 15))
+        end
+    end)
+
+    ---------------------
+    ---------------------
+    -- Spieler Liste/Trolling
+    ---------------------
+    ---------------------
+
+    menu.action(playertroll, "Ragdoll", {}, "", function(on)
+        local coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), 0.0, 0.0, 2.8)
+        FIRE.ADD_EXPLOSION(coords['x'], coords['y'], coords['z'], 70, 100.0, false, true, 0.0)
+    end)
+
+    menu.action(playertroll, "Herzinfarkt", {}, "Führt dazu, dass der Spieler einen Herzinfarkt erleidet und stirbt.", function(on)
+        local coords = ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), 0.0, 0.5, 1.0)
+        local v = PED.GET_VEHICLE_PED_IS_USING(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid))
+        if v ~= 0 then 
+            request_control_of_entity(v)
+            ENTITY.SET_ENTITY_INVINCIBLE(v, true)
+        end
+        FIRE.ADD_EXPLOSION(coords['x'], coords['y'], coords['z'], 47, 100.0, false, true, 0.0)
+        if v ~= 0 then 
+            request_control_of_entity(v)
+            ENTITY.SET_ENTITY_INVINCIBLE(v, false)
+        end
+    end)
+
+    menu.action(playertroll, "Aufschneiden", {}, "Macht aus dem Spieler Fleisch Salat mit Hubschrauberblättern. Funktioniert am besten, wenn der Spieler in der Nähe ist", function(click_type)
+        local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local coords = ENTITY.GET_ENTITY_COORDS(target_ped, false)
+        coords.z = coords['z']+2.5
+        local hash = util.joaat("buzzard")
+        request_model_load(hash)
+        local heli = entities.create_vehicle(hash, coords, ENTITY.GET_ENTITY_HEADING(target_ped))
+        VEHICLE.SET_VEHICLE_ENGINE_ON(heli, true, true, false)
+        VEHICLE.SET_HELI_BLADES_FULL_SPEED(heli)
+        ENTITY.SET_ENTITY_INVINCIBLE(heli, true)
+        ENTITY.FREEZE_ENTITY_POSITION(heli, true)
+        ENTITY.SET_ENTITY_COMPLETELY_DISABLE_COLLISION(heli, true, true)
+        ENTITY.SET_ENTITY_ROTATION(heli, 180, 0.0, ENTITY.GET_ENTITY_HEADING(target_ped), 0)
+        ENTITY.SET_ENTITY_COORDS_NO_OFFSET(heli, coords.x, coords.y, coords.z, true, false, false)
+        VEHICLE.SET_VEHICLE_ENGINE_ON(heli, true, true, true)
+    end)
+
+    -- menu.toggle(playertroll, "Schwarzes Loch", {"sloch"}, "Eine wirklich Nervige Funktion", function(on)
+    --     if on then
+    --         if not blackhole then
+    --             blackhole = true
+    --             menu.trigger_commands(translations.blackhole .. " on")
+    --         end
+    --         bh_target = pid
+    --     else
+    --         bh_target = -1
+    --         if blackhole then
+    --             blackhole = false
+    --             menu.trigger_commands(translations.blackhole .. " off")
+    --         end
+    --     end
+    -- end)
 
     ---------------------
     ---------------------
