@@ -11,7 +11,7 @@ util.require_natives(1663599433)
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.10)                                            --Aktuelle Script Version
+sversion = "0.10.1"                                            --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -27,6 +27,23 @@ local requestModel = STREAMING.REQUEST_MODEL
 -- functions für Entity Controll
 ---------------------
 ---------------------
+
+local function BlockSyncs(pid, callback)
+    for _, i in ipairs(players.list(false, true, true)) do
+        if i ~= pid then
+            local outSync = menu.ref_by_rel_path(menu.player_root(i), "Outgoing Syncs>Block")
+            menu.trigger_command(outSync, "on")
+        end
+    end
+    util.yield(10)
+    callback()
+    for _, i in ipairs(players.list(false, true, true)) do
+        if i ~= pid then
+            local outSync = menu.ref_by_rel_path(menu.player_root(i), "Outgoing Syncs>Block")
+            menu.trigger_command(outSync, "off")
+        end
+    end
+end
 
 local function set_entity_face_entity(entity, target, usePitch)
     local pos1 = ENTITY.GET_ENTITY_COORDS(entity, false)
@@ -1489,7 +1506,7 @@ local function player(pid)
 
     ---------------------
     ---------------------
-    -- Spieler Liste/Anti Modder
+    -- Spieler Liste/Spieler Entfernen
     ---------------------
     ---------------------
 
