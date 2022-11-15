@@ -11,7 +11,7 @@ util.require_natives(1663599433)
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.9)                                            --Aktuelle Script Version
+sversion = tonumber(0.10)                                            --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -1486,6 +1486,48 @@ end)
 
 local function player(pid)
     menu.divider(menu.player_root(pid), "Athego's Script")
+
+    ---------------------
+    ---------------------
+    -- Spieler Liste/Anti Modder
+    ---------------------
+    ---------------------
+
+    local spieler_entfernen = menu.list(menu.player_root(pid), "Athego's Script: Spieler Entfernen", {}, "")
+        menu.divider(spieler_entfernen, "Anti-Modder")
+
+    menu.action(spieler_entfernen, "Griefer Jesus", {}, "Nicht wirklich zuverlässig, funktioniert aber bei den meisten Menüs", function()
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+		local pos = players.get_position(pid)
+		local mdl = util.joaat("u_m_m_jesus_01")
+		local veh_mdl = util.joaat("oppressor")
+		util.request_model(veh_mdl)
+        util.request_model(mdl)
+			for i = 1, 10 do
+				if not players.exists(pid) then
+					return
+				end
+				local veh = entities.create_vehicle(veh_mdl, pos, 0)
+				local jesus = entities.create_ped(2, mdl, pos, 0)
+				PED.SET_PED_INTO_VEHICLE(jesus, veh, -1)
+				util.yield(100)
+				TASK.TASK_VEHICLE_HELI_PROTECT(jesus, veh, ped, 10.0, 0, 10, 0, 0)
+				util.yield(1000)
+				entities.delete_by_handle(jesus)
+				entities.delete_by_handle(veh)
+			end
+		STREAMING.SET_MODEL_AS_NO_LONGER_NEEDED(mdl)
+		STREAMING.SET_MODEL_AS_NO_LONGER_NEEDED(veh_mdl)
+    end)
+
+    menu.action(spieler_entfernen, "Fragment Crash", {""}, "", function()
+        BlockSyncs(pid, function()
+            local object = entities.create_object(util.joaat("prop_fragtest_cnst_04"), ENTITY.GET_ENTITY_COORDS(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)))
+            OBJECT.BREAK_OBJECT_FRAGMENT_CHILD(object, 1, false)
+            util.yield(1000)
+            entities.delete_by_handle(object)
+        end)
+    end)
 
     ---------------------
     ---------------------
