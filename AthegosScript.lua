@@ -11,7 +11,7 @@ util.require_natives(1663599433)
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.11)                                        --Aktuelle Script Version
+sversion = tonumber(0.12)                                        --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -141,6 +141,10 @@ function mod_uses(type, incr)
         end
         object_uses = object_uses + incr
     end
+end
+
+local function IsPlayerUsingOrbitalCannon(player)
+    return BitTest(memory.read_int(memory.script_global((2657589 + (player * 466 + 1) + 427))), 0) -- Global_2657589[PLAYER::PLAYER_ID() /*466*/].f_427), 0
 end
 
 ---------------------
@@ -568,7 +572,14 @@ end)
 ---------------------
 
 local unreleased_vehicles = {
-    "Sentinel4",
+    "virtue",
+    "powersurge",
+    "broadway",
+    "panthere",
+    "issi8",
+    "everon2",
+    "eudora",
+    "boor"
 }
 
 ---------------------
@@ -585,7 +596,6 @@ local modded_vehicles = {
     "cutter",
     "mesa2",
     "jet",
-    "skylift",
     "policeold1",
     "policeold2",
     "armytrailer2",
@@ -840,6 +850,108 @@ local sonstiges <const> = menu.list(menu.my_root(), "Sonstiges", {}, "")
 ---------------------
 ---------------------
 
+---------------------
+---------------------
+-- Selbst/Unlocks
+---------------------
+---------------------
+
+local unlocks = menu.list(self, "Freischalten")
+
+menu.toggle_loop(unlocks, "50 Auto-Garage", {}, "", function()
+    if memory.read_byte(memory.script_global(262145 + 32688)) ~= 0 then-- thx aero for this global <3
+        memory.write_byte(memory.script_global(262145 + 32688), 0) 
+    end
+
+    if memory.read_byte(memory.script_global(262145 + 32702)) ~= 1 then
+        memory.write_byte(memory.script_global(262145 + 32702), 1)  
+    end
+end)
+
+menu.action(unlocks, "Drug Wars Inhalt", {}, "", function()
+    for i = 33974, 34112, 1 do
+        memory.write_byte(memory.script_global(262145 + i), 1)  
+    end
+end)
+
+menu.action(unlocks, "Weihnachts- und Neujahrsgeschenke", {}, "Wechseln Sie die Sitzungen für die zu vergebenden Geschenke.", function()
+    memory.write_byte(memory.script_global(262145 + 33915), 1)  
+    memory.write_byte(memory.script_global(262145 + 33916), 1)  
+end)
+
+---------------------
+---------------------
+-- Selbst/Anti-Orbital
+---------------------
+---------------------
+
+local orb = menu.list(self, "Anti-Orbital Kanone")
+
+ghost_tgl = menu.toggle_loop(orb, "Geist", {""}, "Die Spieler, die die Orbitalkanone benutzen, werden automatisch ausgeblendet.", function()
+    for _, pid in ipairs(players.list(false, true, true)) do
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        if IsPlayerUsingOrbitalCannon(pid) and TASK.GET_IS_TASK_ACTIVE(ped, 135) 
+        and v3.distance(ENTITY.GET_ENTITY_COORDS(players.user_ped(), false), cam_pos) > 300 
+        and v3.distance(ENTITY.GET_ENTITY_COORDS(players.user_ped(), false), cam_pos) < 400 then
+            util.toast(players.get_name(pid) .. " zielt mit der Orbitalkanone auf dich.")
+        end
+       if IsPlayerUsingOrbitalCannon(pid) then
+            NETWORK.SET_REMOTE_PLAYER_AS_GHOST(pid, true)
+        else
+            NETWORK.SET_REMOTE_PLAYER_AS_GHOST(pid, false)
+        end
+    end
+end, function()
+    for _, pid in ipairs(players.list(false, true, true)) do
+        NETWORK.SET_REMOTE_PLAYER_AS_GHOST(pid, false)
+    end
+end)
+
+local annoy = menu.list(orb, "Verärgern", {}, "Zeigt und entfernt Ihren Namen schnell aus der Liste der angreifbaren Spieler.")
+local orb_delay = 1000
+menu.list_select(annoy, "Verzögerung", {}, "Die Geschwindigkeit, mit der Ihr Name bei Nutzern von Orbitalkanonen flackert.", {"Langsam", "Mittel", "Schnell"}, 1, function(index, value)
+switch value do
+    case "Langsam":
+        orb_delay = 1000
+        break
+    case "Mittel":
+        orb_delay = 500
+        break
+    case "Schnell":
+        orb_delay = 100
+        break
+    end
+end)
+
+local annoy_tgl
+annoy_tgl = menu.toggle_loop(annoy, "Aktivieren", {}, "", function()
+    if menu.get_value(ghost_tgl) then
+        menu.set_value(annoy_tgl, false)
+        util.toast("Bitte aktiviere nicht gleichzeitig Verärgern und Geist")
+    return end
+    
+    for _, pid in ipairs(players.list(false, true, true)) do
+       if IsPlayerUsingOrbitalCannon(pid) then
+            NETWORK.SET_REMOTE_PLAYER_AS_GHOST(pid, true)
+            util.yield(orb_delay)
+            NETWORK.SET_REMOTE_PLAYER_AS_GHOST(pid, false)
+            util.yield(orb_delay)
+        else
+            NETWORK.SET_REMOTE_PLAYER_AS_GHOST(pid, false)
+        end
+    end
+end, function()
+    for _, pid in ipairs(players.list(false, true, true)) do
+        NETWORK.SET_REMOTE_PLAYER_AS_GHOST(pid, false)
+    end
+end)
+
+---------------------
+---------------------
+-- Selbst
+---------------------
+---------------------
+
 menu.toggle_loop(self, "Beitretende Spiele Automatisch annehmen", {}, "Automatische Annahme der Beitrittsbildschirme", function()
     local message_hash = HUD.GET_WARNING_SCREEN_MESSAGE_HASH()
     if message_hash == 15890625 or message_hash == -398982408 or message_hash == -587688989 then
@@ -848,23 +960,54 @@ menu.toggle_loop(self, "Beitretende Spiele Automatisch annehmen", {}, "Automatis
     end
 end)
 
-menu.toggle_loop(self, "Mors Mutual Insurance automatisiert", {}, "Holt automatisch die zerstörten Autos von Mors Mutual Insurance zurück", function()
-    local count = memory.read_int(memory.script_global(1585857))
-    for i = 0, count do
-        local canFix = (bitTest(memory.script_global(1585857 + 1 + (i * 142) + 103), 1) and bitTest(memory.script_global(1585857 + 1 + (i * 142) + 103), 2))
-        if canFix then
-            clearBit(memory.script_global(1585857 + 1 + (i * 142) + 103), 1)
-            clearBit(memory.script_global(1585857 + 1 + (i * 142) + 103), 3)
-            clearBit(memory.script_global(1585857 + 1 + (i * 142) + 103), 16)
-            util.toast(sprefix .. " Dein persönliches Fahrzeug wurde zerstört. Es wurde automatisch in Anspruch genommen.")
-            util.log(sprefix .. " Dein persönliches Fahrzeug wurde zerstört. Es wurde automatisch in Anspruch genommen.")
-        end
-    end
-    util.yield(100)
-end)
-
 menu.toggle(self, "Leiser Schritt", {}, "Entfernt die Geräusche die du beim gehen machst", function (toggle)
     AUDIO.SET_PED_FOOTSTEPS_EVENTS_ENABLED(players.user_ped(), not toggle)
+end)
+
+local roll_speed = nil
+menu.list_select(self, "Roll-Geschwindigkeit", {}, "", {"Standard", "1.25x", "1.5x", "1.75x", "2x"}, 1, function(index, value)
+roll_speed = index
+util.create_tick_handler(function()
+    switch value do
+        case "1.25x":
+            STATS.STAT_SET_INT(util.joaat("MP"..util.get_char_slot().."_SHOOTING_ABILITY"), 115, true)
+            break
+        case "1.5x":
+            STATS.STAT_SET_INT(util.joaat("MP"..util.get_char_slot().."_SHOOTING_ABILITY"), 125, true)
+            break
+        case "1.75x":
+            STATS.STAT_SET_INT(util.joaat("MP"..util.get_char_slot().."_SHOOTING_ABILITY"), 135, true)
+            break
+        case "2x":
+            STATS.STAT_SET_INT(util.joaat("MP"..util.get_char_slot().."_SHOOTING_ABILITY"), 150, true)
+            break
+        end
+        return roll_speed == index
+    end)
+end)
+
+local climb_speed = nil
+menu.list_select(self, "Kletter-Geschwindigkeit", {}, "", {"Standard", "1.25x", "1.5x", "2x",}, 1, function(index, value)
+climb_speed = index
+util.create_tick_handler(function()
+    if TASK.GET_IS_TASK_ACTIVE(players.user_ped(), 1) then
+        switch value do
+            case "1.25x":
+                PED.FORCE_PED_AI_AND_ANIMATION_UPDATE(players.user_ped())
+                util.yield(150)
+                break
+            case "1.5x":
+                PED.FORCE_PED_AI_AND_ANIMATION_UPDATE(players.user_ped())
+                util.yield(75)
+                break
+            case "2x":
+                PED.FORCE_PED_AI_AND_ANIMATION_UPDATE(players.user_ped())
+                util.yield(50)
+                break
+            end
+        end
+        return climb_speed == index
+    end)
 end)
 
 menu.action(self, "Explodiere selbst", {}, "", function()
@@ -875,9 +1018,58 @@ end)
 
 ---------------------
 ---------------------
--- Selbst/Unlocks
+-- Farhzeug
 ---------------------
 ---------------------
+
+local seat_id = -1
+local moved_seat = menu.click_slider(fahrzeuge, "Sitz wechseln", {}, "", 1, 1, 1, 1, function(seat_id)
+    TASK.TASK_WARP_PED_INTO_VEHICLE(players.user_ped(), entities.get_user_vehicle_as_handle(), seat_id - 2)
+end)
+
+menu.on_tick_in_viewport(moved_seat, function()
+    if not PED.IS_PED_IN_ANY_VEHICLE(players.user_ped(), false) then
+        moved_seat.max_value = 0
+    return end
+
+    if not PED.IS_PED_IN_ANY_VEHICLE(players.user_ped(), false) then
+        moved_seat.max_value = 0
+    return end
+    
+    moved_seat.max_value = VEHICLE.GET_VEHICLE_MODEL_NUMBER_OF_SEATS(ENTITY.GET_ENTITY_MODEL(entities.get_user_vehicle_as_handle()))
+end)
+
+menu.toggle_loop(fahrzeuge, "Schnelles Hotwire", {""}, "", function()
+    if not VEHICLE.GET_IS_VEHICLE_ENGINE_RUNNING(entities.get_user_vehicle_as_handle()) and TASK.GET_IS_TASK_ACTIVE(players.user_ped(), 150) then
+        PED.FORCE_PED_AI_AND_ANIMATION_UPDATE(players.user_ped())
+    end
+end)
+
+menu.toggle_loop(fahrzeuge, "Schneller einsteigen", {""}, "Fahrzeuge schneller betreten.", function()
+    if (TASK.GET_IS_TASK_ACTIVE(players.user_ped(), 160) or TASK.GET_IS_TASK_ACTIVE(players.user_ped(), 167) or TASK.GET_IS_TASK_ACTIVE(players.user_ped(), 165)) and not TASK.GET_IS_TASK_ACTIVE(players.user_ped(), 195) then
+        PED.FORCE_PED_AI_AND_ANIMATION_UPDATE(players.user_ped())
+    end
+end)
+
+menu.toggle_loop(fahrzeuge, "Godmode beim Verlassen deaktivieren", {""}, "", function()
+    if not ENTITY.GET_ENTITY_CAN_BE_DAMAGED(entities.get_user_vehicle_as_handle()) then
+        if not PED.IS_PED_IN_ANY_VEHICLE(players.user_ped(), false) then
+            ENTITY.SET_ENTITY_CAN_BE_DAMAGED(PED.GET_VEHICLE_PED_IS_IN(players.user_ped(), true), true)
+        end
+    end
+end)
+
+menu.toggle_loop(fahrzeuge, "Wheelie-Start", {}, "Drücke Strg und W zum Wheelie.", function(toggled)
+    local veh = entities.get_user_vehicle_as_handle()
+    if veh == 0 then return end
+    local CAutomobile = entities.handle_to_pointer(veh)
+    local CHandlingData = memory.read_long(CAutomobile + 0x0918)
+    if util.is_key_down(0x57) and util.is_key_down(0x11) then 
+       memory.write_float(CHandlingData + 0x00EC, -0.25)
+    else
+       memory.write_float(CHandlingData + 0x00EC, 0.5)
+    end
+end)
 
 ---------------------
 ---------------------
@@ -929,8 +1121,11 @@ end)
 menu.toggle_loop(detections, "Nicht veröffentliches Fahrzeug", {}, "Erkennt ob jemand ein Fahrzeug benutzt welches noch nicht veröffentlicht wurde", function()
     for _, pid in ipairs(players.list(false, true, true)) do
         local modelHash = players.get_vehicle_model(pid)
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local vehicle = PED.GET_VEHICLE_PED_IS_USING(ped)
+        local PedID = NETWORK.NETWORK_GET_PLAYER_INDEX_FROM_PED(VEHICLE.GET_PED_IN_VEHICLE_SEAT(vehicle, -1))
         for i, name in ipairs(unreleased_vehicles) do
-            if modelHash == util.joaat(name) then
+            if modelHash == util.joaat(name) and PED.IS_PED_IN_ANY_VEHICLE(ped, false) then
                 util.toast(sprefix .. " " .. players.get_name(pid) .. " fährt ein unveröffentliches Fahrzeug " .. "(" .. name .. ")")
                 util.log(sprefix .. " " .. players.get_name(pid) .. " fährt ein unveröffentliches Fahrzeug " .. "(" .. name .. ")")
             end
@@ -1216,6 +1411,28 @@ from_scratch = menu.action(loadout, "Fang von Vorne an", {}, "Löscht jede Waffe
             util.toast(sprefix .. " Deine Waffen wurde gelöscht!")
             util.log(sprefix .. " Deine Waffen wurde gelöscht!")
         end)
+
+protect_weapons = menu.toggle(loadout, "Meine Waffen schützen", {}, "Andere Modder daran hindern, deine Waffen zu entfernen oder dir neue zu geben\n(Sollte ausbleiben wenn du vor hast Missionen zu spielen)",
+    function(on, click_type)
+        local single_path = menu.ref_by_path("Online>Protections>Events>Raw Network Events>Remove Weapon Event>Block")
+        local all_path = menu.ref_by_path("Online>Protections>Events>Raw Network Events>Remove All Weapons Event>Block")
+        local add_path = menu.ref_by_path("Online>Protections>Events>Raw Network Events>Give Weapon Event>Block")
+        if on then
+            if single_path.value > 0 and all_path.value > 0 and add_path.value > 0 then
+                util.toast("Die Protections sind bereits an. Du solltest sicher sein")
+            else
+                single_path.value = 1
+                all_path.value = 1
+                add_path.value = 1
+            end
+        else
+            if click_type == 4 then return end
+            single_path.value = 0
+            all_path.value = 0
+            add_path.value = 0
+        end
+    end
+)
 
 menu.divider(loadout, "Waffen bearbeiten")
 
@@ -2015,6 +2232,37 @@ local function player(pid)
         end
     end)
 
+    menu.action(playertroll,  "Spieler aus dem Innenraum zwingen", {}, "Für die meisten Innenräume geeignet.", function() -- very innovative!
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local pos = ENTITY.GET_ENTITY_COORDS(ped, false)
+        local glitch_hash = util.joaat("p_spinning_anus_s")
+        local poopy_butt = util.joaat("brickade2")
+        request_model(glitch_hash)
+        request_model(poopy_butt)
+        for i, interior in ipairs(interior_stuff) do
+            if get_interior_player_is_in(pid) == interior then
+                util.toast("Der Spieler befindet sich nicht in einem Innenraum :/")
+            return end
+        end
+        for i = 1, 5 do
+            local stupid_object = entities.create_object(glitch_hash, pos)
+            local glitch_vehicle = entities.create_vehicle(poopy_butt, pos, 0)
+            ENTITY.SET_ENTITY_VISIBLE(stupid_object, false)
+            ENTITY.SET_ENTITY_VISIBLE(glitch_vehicle, false)
+            ENTITY.SET_ENTITY_INVINCIBLE(stupid_object, true)
+            ENTITY.SET_ENTITY_COLLISION(stupid_object, true, true)
+            ENTITY.APPLY_FORCE_TO_ENTITY(glitch_vehicle, 1, 0.0, 10, 10, 0.0, 0.0, 0.0, 0, 1, 1, 1, 0, 1)
+            util.yield(500)
+            entities.delete_by_handle(stupid_object)
+            entities.delete_by_handle(glitch_vehicle)
+            util.yield(500)     
+        end
+    end)
+
+    menu.action(playertroll, "An Schwarze Leere senden", {""}, "Die Ergebnisse können variieren, je nachdem, ob sie ein aktives MOC haben.", function()
+        util.trigger_script_event(1 << pid, {1268038438, pid, 81, 0, 0, 1, 1130429716, -1001012850, 1106067788, 0, 0, 1, 2123789977, 1, -1})
+    end)
+
     menu.action(playertroll, "Aufschneiden", {}, "Macht aus dem Spieler Fleisch Salat mit Hubschrauberblättern. Funktioniert am besten, wenn der Spieler in der Nähe ist", function(click_type)
         local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         local coords = ENTITY.GET_ENTITY_COORDS(target_ped, false)
@@ -2159,7 +2407,7 @@ while true do
         while NETWORK.NETWORK_IS_IN_SESSION() == false or util.is_session_transition_active() do
             util.yield(1000)
         end
-        util.yield(3000)
+        util.yield(1700)
         -- people didn't like the long loading time, but weapons/attachments don't seem to properly get deleted and loaded directly on spawn. So we'll just wait for them to do their first step
 		spawnpos = players.get_position(players.user())
         repeat
