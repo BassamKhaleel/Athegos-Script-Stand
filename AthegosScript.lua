@@ -11,7 +11,7 @@ util.require_natives(1663599433)
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.12)                                        --Aktuelle Script Version
+sversion = tonumber(0.13)                                           --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -1086,12 +1086,12 @@ end)
 local detections = menu.list(online, "Erkennungen", {}, "")
     menu.divider(detections, "Athego's Script - Erkennungen")
 
-menu.toggle_loop(detections, "Godmode", {}, "Erkennt ob jemand Godmode benutzt", function()
-    for _, pid in ipairs(players.list(false, true, true)) do
-        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
-        local pos = ENTITY.GET_ENTITY_COORDS(ped, false)
-        for i, interior in ipairs(interior_stuff) do
-            if players.is_godmode(pid) and (not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped)) and get_transition_state(pid) == 99 and get_interior_player_is_in(pid) == interior then
+    menu.toggle_loop(detections, "Godmode", {}, "Detects if someone is using godmode.", function()
+        for _, pid in ipairs(players.list(false, true, true)) do
+            local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+            local pos = ENTITY.GET_ENTITY_COORDS(ped, false)
+            for i, interior in ipairs(interior_stuff) do
+                if players.is_godmode(pid) and not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped) and get_spawn_state(pid) == 99 and get_interior_player_is_in(pid) == interior then
                 util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt Godmode")
                 util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt Godmode")
                 break
@@ -1160,31 +1160,31 @@ menu.toggle_loop(detections, "Gemoddetes Fahrzeug", {}, "Erkennt ob jemand ein G
     end
 end)
 
--- menu.toggle_loop(detections, "Noclip", {}, "Erkennt ob Spieler Noclip benutzten bzw Levitation", function()
---     for _, pid in ipairs(players.list(false, true, true)) do
---         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
---         local ped_ptr = entities.handle_to_pointer(ped)
---         local vehicle = PED.GET_VEHICLE_PED_IS_USING(ped)
---         local oldpos = players.get_position(pid)
---         util.yield()
---         local currentpos = players.get_position(pid)
---         local vel = ENTITY.GET_ENTITY_VELOCITY(ped)
---         if not util.is_session_transition_active() and players.exists(pid)
---         and get_interior_player_is_in(pid) == 0 and get_transition_state(pid) ~= 0
---         and not PED.IS_PED_IN_ANY_VEHICLE(ped, false) -- too many false positives occured when players where driving. so fuck them. lol.
---         and not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped) and not PED.IS_PED_DEAD_OR_DYING(ped)
---         and not PED.IS_PED_CLIMBING(ped) and not PED.IS_PED_VAULTING(ped) and not PED.IS_PED_USING_SCENARIO(ped)
---         and not TASK.GET_IS_TASK_ACTIVE(ped, 160) and not TASK.GET_IS_TASK_ACTIVE(ped, 2)
---         and v3.distance(ENTITY.GET_ENTITY_COORDS(players.user_ped(), false), players.get_position(pid)) <= 395.0 -- 400 was causing false positives
---         and ENTITY.GET_ENTITY_HEIGHT_ABOVE_GROUND(ped) > 5.0 and not ENTITY.IS_ENTITY_IN_AIR(ped) and entities.player_info_get_game_state(ped_ptr) == 0
---         and oldpos.x ~= currentpos.x and oldpos.y ~= currentpos.y and oldpos.z ~= currentpos.z 
---         and vel.x == 0.0 and vel.y == 0.0 and vel.z == 0.0 then
---             util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt Noclip!")
---             util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt Noclip!")
---             break
---         end
---     end
--- end)
+menu.toggle_loop(detections, "Noclip", {}, "Erkennt ob jemand Noclipe benutzt", function()
+    for _, pid in ipairs(players.list(false, true, true)) do
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local ped_ptr = entities.handle_to_pointer(ped)
+        local vehicle = PED.GET_VEHICLE_PED_IS_USING(ped)
+        local oldpos = players.get_position(pid)
+        util.yield()
+        local currentpos = players.get_position(pid)
+        local vel = ENTITY.GET_ENTITY_VELOCITY(ped)
+        if not util.is_session_transition_active() and players.exists(pid)
+        and get_interior_player_is_in(pid) == 0 and get_spawn_state(pid) ~= 0
+        and not PED.IS_PED_IN_ANY_VEHICLE(ped, false) -- too many false positives occured when players where driving. so fuck them. lol.
+        and not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped) and not PED.IS_PED_DEAD_OR_DYING(ped)
+        and not PED.IS_PED_CLIMBING(ped) and not PED.IS_PED_VAULTING(ped) and not PED.IS_PED_USING_SCENARIO(ped)
+        and not TASK.GET_IS_TASK_ACTIVE(ped, 160) and not TASK.GET_IS_TASK_ACTIVE(ped, 2)
+        and v3.distance(ENTITY.GET_ENTITY_COORDS(players.user_ped(), false), players.get_position(pid)) <= 395.0 -- 400 was causing false positives
+        and ENTITY.GET_ENTITY_HEIGHT_ABOVE_GROUND(ped) > 5.0 and not ENTITY.IS_ENTITY_IN_AIR(ped) and entities.player_info_get_game_state(ped_ptr) == 0
+        and oldpos.x ~= currentpos.x and oldpos.y ~= currentpos.y and oldpos.z ~= currentpos.z 
+        and vel.x == 0.0 and vel.y == 0.0 and vel.z == 0.0 then
+            util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt Noclip")
+            util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt Noclip")
+            break
+        end
+    end
+end)
 
 menu.toggle_loop(detections, "Super Drive", {}, "Erkennt ob jemand Super Drive benutzt.", function()
     for _, pid in ipairs(players.list(false, true, true)) do
@@ -1196,6 +1196,22 @@ menu.toggle_loop(detections, "Super Drive", {}, "Erkennt ob jemand Super Drive b
             util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt Super Drive")
             util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt Super Drive")
             break
+        end
+    end
+end)
+
+menu.toggle_loop(detections, "Zuschauen", {}, "Erkennt ob dir jemand zuguckt.", function()
+    for _, pid in ipairs(players.list(false, true, true)) do
+        for i, interior in ipairs(interior_stuff) do
+            local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+            if not util.is_session_transition_active() and get_spawn_state(pid) ~= 0 and get_interior_player_is_in(pid) == interior
+            and not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped) and not PED.IS_PED_DEAD_OR_DYING(ped) then
+                if v3.distance(ENTITY.GET_ENTITY_COORDS(players.user_ped(), false), players.get_cam_pos(pid)) < 15.0 and v3.distance(ENTITY.GET_ENTITY_COORDS(players.user_ped(), false), players.get_position(pid)) > 20.0 then
+                    util.toast(sprefix .. " " .. players.get_name(pid) .. " schaut dir zu")
+                    util.log(sprefix .. " " .. players.get_name(pid) .. " schaut dir zu")
+                    break
+                end
+            end
         end
     end
 end)
