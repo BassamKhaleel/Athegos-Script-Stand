@@ -11,7 +11,7 @@ util.require_natives("natives-1672190175-uno")
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.14)                                           --Aktuelle Script Version
+sversion = tonumber(0.15)                                           --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -1809,7 +1809,24 @@ local function player(pid)
 		STREAMING.SET_MODEL_AS_NO_LONGER_NEEDED(veh_mdl)
     end)
 
-    menu.action(spieler_entfernen, "Fragment Crash", {""}, "", function()
+    menu.action(spieler_entfernen, "Oberschenkel Crash", {}, "Wird von manchen bekannten Menüs blockiert", function()
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local user = PLAYER.GET_PLAYER_PED(players.user())
+        local pos = ENTITY.GET_ENTITY_COORDS(ped)
+        local my_pos = ENTITY.GET_ENTITY_COORDS(user)
+        local anim_dict = ("anim@mp_player_intupperstinker")
+        request_animation(anim_dict)
+        BlockSyncs(pid, function()
+            ENTITY.SET_ENTITY_COORDS_NO_OFFSET(user, pos, false, false, false)
+            util.yield(100)
+            TASK.TASK_SWEEP_AIM_POSITION(user, anim_dict, "get", "fucked", "retard", -1, 0.0, 0.0, 0.0, 0.0, 0.0)
+            util.yield(100)
+        end)
+        TASK.CLEAR_PED_TASKS_IMMEDIATELY(user)
+        ENTITY.SET_ENTITY_COORDS_NO_OFFSET(user, my_pos, false, false, false)
+    end)
+
+    menu.action(spieler_entfernen, "Fragment Crash", {}, "Wird von den meisten Menüs geblockt", function()
         BlockSyncs(pid, function()
             local object = entities.create_object(util.joaat("prop_fragtest_cnst_04"), ENTITY.GET_ENTITY_COORDS(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)))
             OBJECT.BREAK_OBJECT_FRAGMENT_CHILD(object, 1, false)
