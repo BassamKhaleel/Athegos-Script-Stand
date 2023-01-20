@@ -4,14 +4,14 @@
 ---------------------
 ---------------------
 
-util.require_natives(1663599433)
+util.require_natives("natives-1672190175-uno")
 
 ---------------------
 ---------------------
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.13)                                           --Aktuelle Script Version
+sversion = tonumber(0.14)                                           --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -143,8 +143,16 @@ function mod_uses(type, incr)
     end
 end
 
+local function BitTest(bits, place)
+    return (bits & (1 << place)) ~= 0
+end
+
 local function IsPlayerUsingOrbitalCannon(player)
     return BitTest(memory.read_int(memory.script_global((2657589 + (player * 466 + 1) + 427))), 0) -- Global_2657589[PLAYER::PLAYER_ID() /*466*/].f_427), 0
+end
+
+local function get_spawn_state(pid)
+    return memory.read_int(memory.script_global(((2657589 + 1) + (pid * 466)) + 232)) -- Global_2657589[PLAYER::PLAYER_ID() /*466*/].f_232
 end
 
 ---------------------
@@ -1086,7 +1094,13 @@ end)
 local detections = menu.list(online, "Erkennungen", {}, "")
     menu.divider(detections, "Athego's Script - Erkennungen")
 
-    menu.toggle_loop(detections, "Godmode", {}, "Detects if someone is using godmode.", function()
+    local modderdetections = menu.list(detections, "Modder Erkennungen", {}, "")
+    menu.divider(modderdetections, "Athego's Script - Modder Erkennungen")
+
+    local normaldetections = menu.list(detections, "Standart Erkennungen", {}, "")
+    menu.divider(normaldetections, "Athego's Script - Standart Erkennungen")
+
+    menu.toggle_loop(modderdetections, "Godmode", {}, "Detects if someone is using godmode.", function()
         for _, pid in ipairs(players.list(false, true, true)) do
             local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
             local pos = ENTITY.GET_ENTITY_COORDS(ped, false)
@@ -1100,14 +1114,15 @@ local detections = menu.list(online, "Erkennungen", {}, "")
     end
 end)
 
-menu.toggle_loop(detections, "Fahrzeug Godmode", {}, "Erkennt ob jemand Fahrzeug Godmode benutzt", function()
+menu.toggle_loop(modderdetections, "Fahrzeug Godmode", {}, "Erkennt ob jemand Fahrzeug Godmode benutzt", function()
     for _, pid in ipairs(players.list(false, true, true)) do
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         local pos = ENTITY.GET_ENTITY_COORDS(ped, false)
-        local player_veh = PED.GET_VEHICLE_PED_IS_USING(ped)
+        local vehicle = PED.GET_VEHICLE_PED_IS_USING(ped)
+        local PedID = NETWORK.NETWORK_GET_PLAYER_INDEX_FROM_PED(VEHICLE.GET_PED_IN_VEHICLE_SEAT(vehicle, -1))
         if PED.IS_PED_IN_ANY_VEHICLE(ped, false) then
-            for i, interior in ipairs(interior_stuff) do
-                if not ENTITY.GET_ENTITY_CAN_BE_DAMAGED(player_veh) and (not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped)) and get_transition_state(pid) == 99 and get_interior_player_is_in(pid) == interior then
+            for _, id in ipairs(interior_stuff) do
+                if not ENTITY.GET_ENTITY_CAN_BE_DAMAGED(vehicle) and not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped) and get_spawn_state(pid) == 99 and get_interior_player_is_in(pid) == id then
                     util.draw_debug_text(sprefix .. " " .. players.get_name(pid) .. " benutzt Vehicle Godmode")
                     util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt Vehicle Godmode")
                     util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt Vehicle Godmode")
@@ -1115,10 +1130,10 @@ menu.toggle_loop(detections, "Fahrzeug Godmode", {}, "Erkennt ob jemand Fahrzeug
                 end
             end
         end
-    end
+    end 
 end)
 
-menu.toggle_loop(detections, "Nicht veröffentliches Fahrzeug", {}, "Erkennt ob jemand ein Fahrzeug benutzt welches noch nicht veröffentlicht wurde", function()
+menu.toggle_loop(modderdetections, "Nicht veröffentliches Fahrzeug", {}, "Erkennt ob jemand ein Fahrzeug benutzt welches noch nicht veröffentlicht wurde", function()
     for _, pid in ipairs(players.list(false, true, true)) do
         local modelHash = players.get_vehicle_model(pid)
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
@@ -1133,7 +1148,7 @@ menu.toggle_loop(detections, "Nicht veröffentliches Fahrzeug", {}, "Erkennt ob 
     end
 end)
 
-menu.toggle_loop(detections, "Gemoddete Waffe", {}, "Erkennt ob jemand eine Waffe benutzt die man Online nicht haben kann.", function()
+menu.toggle_loop(modderdetections, "Gemoddete Waffe", {}, "Erkennt ob jemand eine Waffe benutzt die man Online nicht haben kann.", function()
     for _, pid in ipairs(players.list(false, true, true)) do
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         for i, hash in ipairs(modded_weapons) do
@@ -1147,9 +1162,12 @@ menu.toggle_loop(detections, "Gemoddete Waffe", {}, "Erkennt ob jemand eine Waff
     end
 end)
 
-menu.toggle_loop(detections, "Gemoddetes Fahrzeug", {}, "Erkennt ob jemand ein Gemoddetes Fahrzeug benutzt", function()
+menu.toggle_loop(modderdetections, "Gemoddetes Fahrzeug", {}, "Erkennt ob jemand ein Gemoddetes Fahrzeug benutzt", function()
     for _, pid in ipairs(players.list(false, true, true)) do
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local vehicle = PED.GET_VEHICLE_PED_IS_USING(ped)
         local modelHash = players.get_vehicle_model(pid)
+        local PedID = NETWORK.NETWORK_GET_PLAYER_INDEX_FROM_PED(VEHICLE.GET_PED_IN_VEHICLE_SEAT(vehicle, -1))
         for i, name in ipairs(modded_vehicles) do
             if modelHash == util.joaat(name) then
                 util.toast(sprefix .. " " .. players.get_name(pid) .. " fährt ein gemoddetes Fahrzeug " .. "(" .. name .. ")")
@@ -1160,7 +1178,7 @@ menu.toggle_loop(detections, "Gemoddetes Fahrzeug", {}, "Erkennt ob jemand ein G
     end
 end)
 
-menu.toggle_loop(detections, "Noclip", {}, "Erkennt ob jemand Noclipe benutzt", function()
+menu.toggle_loop(modderdetections, "Noclip", {}, "Erkennt ob jemand Noclipe benutzt", function()
     for _, pid in ipairs(players.list(false, true, true)) do
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         local ped_ptr = entities.handle_to_pointer(ped)
@@ -1186,7 +1204,7 @@ menu.toggle_loop(detections, "Noclip", {}, "Erkennt ob jemand Noclipe benutzt", 
     end
 end)
 
-menu.toggle_loop(detections, "Super Drive", {}, "Erkennt ob jemand Super Drive benutzt.", function()
+menu.toggle_loop(modderdetections, "Super Drive", {}, "Erkennt ob jemand Super Drive benutzt.", function()
     for _, pid in ipairs(players.list(false, true, true)) do
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         local vehicle = PED.GET_VEHICLE_PED_IS_USING(ped)
@@ -1200,20 +1218,41 @@ menu.toggle_loop(detections, "Super Drive", {}, "Erkennt ob jemand Super Drive b
     end
 end)
 
-menu.toggle_loop(detections, "Zuschauen", {}, "Erkennt ob dir jemand zuguckt.", function()
+menu.toggle_loop(modderdetections, "Zuschauen", {}, "Erkennt ob dir jemand zuguckt.", function()
     for _, pid in ipairs(players.list(false, true, true)) do
-        for i, interior in ipairs(interior_stuff) do
-            local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
-            if not util.is_session_transition_active() and get_spawn_state(pid) ~= 0 and get_interior_player_is_in(pid) == interior
-            and not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped) and not PED.IS_PED_DEAD_OR_DYING(ped) then
-                if v3.distance(ENTITY.GET_ENTITY_COORDS(players.user_ped(), false), players.get_cam_pos(pid)) < 15.0 and v3.distance(ENTITY.GET_ENTITY_COORDS(players.user_ped(), false), players.get_position(pid)) > 20.0 then
-                    util.toast(sprefix .. " " .. players.get_name(pid) .. " schaut dir zu")
-                    util.log(sprefix .. " " .. players.get_name(pid) .. " schaut dir zu")
-                    break
-                end
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        if not PED.IS_PED_DEAD_OR_DYING(ped) then
+            if v3.distance(ENTITY.GET_ENTITY_COORDS(players.user_ped(), false), players.get_cam_pos(pid)) < 15.0 and v3.distance(ENTITY.GET_ENTITY_COORDS(players.user_ped(), false), players.get_position(pid)) > 20.0 then
+                util.toast(sprefix .. " " .. players.get_name(pid) .. " schaut dir zu")
+                util.log(sprefix .. " " .. players.get_name(pid) .. " schaut dir zu")
+                break
             end
         end
     end
+end)
+
+menu.toggle_loop(normaldetections, "Orbital Kanone", {}, "Erkennt ob jemand die Orbital Kanone benutzt.", function()
+    for _, pid in ipairs(players.list(false, true, true)) do
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        if IsPlayerUsingOrbitalCannon(pid) and TASK.GET_IS_TASK_ACTIVE(ped, 135)then
+            util.toast(sprefix .. " " .. players.get_name(pid) .. " ist bei der Orbital Kanone")
+                util.log(sprefix .. " " .. players.get_name(pid) .. " ist bei der Orbital Kanone")
+        end
+    end
+end)
+
+menu.toggle_loop(normaldetections, "Glitched Godmode", {}, "Erkennt ob jemand einen Glitch benutzt hat um Godmode zu bekommen.", function()
+    for _, pid in ipairs(players.list(false, true, true)) do
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local pos = ENTITY.GET_ENTITY_COORDS(ped, false) 
+        for _, id in ipairs(interior_stuff) do
+            if players.is_in_interior(pid) and players.is_godmode(pid) and not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped) and get_spawn_state(pid) == 99 and get_interior_player_is_in(pid) == id then
+                util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt Glitched Godmode")
+                util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt Glitched Godmode")
+                break
+            end
+        end
+    end 
 end)
 
 ---------------------
@@ -2387,15 +2426,6 @@ local function player(pid)
             entities.delete_by_handle(spawned_vehs[i])
         end
     end)
-
-    -- player_toggle_loop(kill_godmode, pid, "Explodieren", {}, "Wird von den meisten Menüs gegblockt", function()
-    --     local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
-    --     local pos = ENTITY.GET_ENTITY_COORDS(ped)
-    --     if not PED.IS_PED_DEAD_OR_DYING(ped) and not NETWORK.NETWORK_IS_PLAYER_FADING(pid) then
-    --         util.trigger_script_event(1 << pid, {0xAD36AA57, pid, 0x96EDB12F, math.random(0, 0x270F)})
-    --         FIRE.ADD_OWNED_EXPLOSION(players.user_ped(), pos, 2, 50, true, false, 0.0)
-    --     end
-    -- end)
 
 
 
