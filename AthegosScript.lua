@@ -11,7 +11,7 @@ util.require_natives("natives-1672190175-uno")
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.15)                                           --Aktuelle Script Version
+sversion = tonumber(0.16)                                           --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -21,6 +21,7 @@ local objectInterface = memory.read_long(replayInterface + 0x0028)
 local pickupInterface = memory.read_long(replayInterface + 0x0020)
 local playerid = players.user()
 local requestModel = STREAMING.REQUEST_MODEL
+local InSession = function() return util.is_session_started() and not util.is_session_transition_active() end
 
 ---------------------
 ---------------------
@@ -55,6 +56,13 @@ local function set_entity_face_entity(entity, target, usePitch)
         ENTITY.SET_ENTITY_HEADING(entity, rot.z)
     else
         ENTITY.SET_ENTITY_ROTATION(entity, rot.x, rot.y, rot.z, 2, 0)
+    end
+end
+
+local function request_animation(hash)
+    STREAMING.REQUEST_ANIM_DICT(hash)
+    while not STREAMING.HAS_ANIM_DICT_LOADED(hash) do
+        util.yield()
     end
 end
 
@@ -581,10 +589,8 @@ end)
 
 local unreleased_vehicles = {
     "virtue",
-    "powersurge",
     "broadway",
     "panthere",
-    "issi8",
     "everon2",
     "eudora",
     "boor"
@@ -860,47 +866,20 @@ local sonstiges <const> = menu.list(menu.my_root(), "Sonstiges", {}, "")
 
 ---------------------
 ---------------------
--- Selbst/Unlocks
----------------------
----------------------
-
-local unlocks = menu.list(self, "Freischalten")
-
-menu.toggle_loop(unlocks, "50 Auto-Garage", {}, "", function()
-    if memory.read_byte(memory.script_global(262145 + 32688)) ~= 0 then-- thx aero for this global <3
-        memory.write_byte(memory.script_global(262145 + 32688), 0) 
-    end
-
-    if memory.read_byte(memory.script_global(262145 + 32702)) ~= 1 then
-        memory.write_byte(memory.script_global(262145 + 32702), 1)  
-    end
-end)
-
-menu.action(unlocks, "Drug Wars Inhalt", {}, "", function()
-    for i = 33974, 34112, 1 do
-        memory.write_byte(memory.script_global(262145 + i), 1)  
-    end
-end)
-
-menu.action(unlocks, "Weihnachts- und Neujahrsgeschenke", {}, "Wechseln Sie die Sitzungen für die zu vergebenden Geschenke.", function()
-    memory.write_byte(memory.script_global(262145 + 33915), 1)  
-    memory.write_byte(memory.script_global(262145 + 33916), 1)  
-end)
-
----------------------
----------------------
 -- Selbst/Anti-Orbital
 ---------------------
 ---------------------
 
 local orb = menu.list(self, "Anti-Orbital Kanone")
+local ghost = menu.list(orb, "Ghost")
 
-ghost_tgl = menu.toggle_loop(orb, "Geist", {""}, "Die Spieler, die die Orbitalkanone benutzen, werden automatisch ausgeblendet.", function()
+ghost_tgl = menu.toggle_loop(ghost, "Immer", {""}, "Die Spieler, die die Orbitalkanone benutzen, werden automatisch geghostet.", function()
     for _, pid in ipairs(players.list(false, true, true)) do
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
-        if IsPlayerUsingOrbitalCannon(pid) and TASK.GET_IS_TASK_ACTIVE(ped, 135) 
-        and v3.distance(ENTITY.GET_ENTITY_COORDS(players.user_ped(), false), cam_pos) > 300 
-        and v3.distance(ENTITY.GET_ENTITY_COORDS(players.user_ped(), false), cam_pos) < 400 then
+        local cam_pos = players.get_cam_pos(pid)
+        if IsPlayerUsingOrbitalCannon(pid) and TASK.GET_IS_TASK_ACTIVE(ped, 135)
+        and v3.distance(ENTITY.GET_ENTITY_COORDS(players.user_ped(), false), cam_pos) < 400
+        and v3.distance(ENTITY.GET_ENTITY_COORDS(players.user_ped(), false), cam_pos) > 340 then
             util.toast(players.get_name(pid) .. " zielt mit der Orbitalkanone auf dich.")
         end
        if IsPlayerUsingOrbitalCannon(pid) then
@@ -915,9 +894,32 @@ end, function()
     end
 end)
 
+local tgl
+tgl = menu.toggle_loop(ghost, "Während du im Visier bist", {}, "Spieler die mit der Orbitalkanone auf die Zielen werden geghostet.", function()
+    if menu.get_value(ghost_tgl) then
+        menu.set_value(tgl, false)
+    return end
+    for _, pid in ipairs(players.list(false, true, true)) do
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local cam_pos = players.get_cam_pos(pid)
+        if IsPlayerUsingOrbitalCannon(pid) and TASK.GET_IS_TASK_ACTIVE(ped, 135) 
+        and v3.distance(ENTITY.GET_ENTITY_COORDS(players.user_ped(), false), cam_pos) < 400
+        and v3.distance(ENTITY.GET_ENTITY_COORDS(players.user_ped(), false), cam_pos) > 340 then
+            util.toast(players.get_name(pid) .. " zielt mit der Orbitalkanone auf dich.")
+            NETWORK.SET_REMOTE_PLAYER_AS_GHOST(pid, true)
+        else
+            NETWORK.SET_REMOTE_PLAYER_AS_GHOST(pid, false)
+        end
+    end
+end, function()
+    for _, pid in ipairs(players.list(false, true, true)) do
+        NETWORK.SET_REMOTE_PLAYER_AS_GHOST(pid, false)
+    end
+end)
+
 local annoy = menu.list(orb, "Verärgern", {}, "Zeigt und entfernt Ihren Namen schnell aus der Liste der angreifbaren Spieler.")
 local orb_delay = 1000
-menu.list_select(annoy, "Verzögerung", {}, "Die Geschwindigkeit, mit der Ihr Name bei Nutzern von Orbitalkanonen flackert.", {"Langsam", "Mittel", "Schnell"}, 1, function(index, value)
+menu.list_select(annoy, "Verzögerung", {}, "Die Geschwindigkeit, mit der dein Name bei Spielern die die Orbitalkanone nutzen flackert.", {"Langsam", "Mittel", "Schnell"}, 1, function(index, value)
 switch value do
     case "Langsam":
         orb_delay = 1000
@@ -962,10 +964,54 @@ end)
 
 menu.toggle_loop(self, "Beitretende Spiele Automatisch annehmen", {}, "Automatische Annahme der Beitrittsbildschirme", function()
     local message_hash = HUD.GET_WARNING_SCREEN_MESSAGE_HASH()
-    if message_hash == 15890625 or message_hash == -398982408 or message_hash == -587688989 then
+    if message_hash == 15890625 then
         PAD.SET_CONTROL_VALUE_NEXT_FRAME(2, 201, 1.0)
         util.yield(50)
     end
+end)
+
+menu.toggle_loop(self, "Unterdrückt die meisten Warnungen",{},"",function()
+    local mess_hash = HUD.GET_WARNING_SCREEN_MESSAGE_HASH()
+    if mess_hash == -896436592 then
+        util.toast(sprefix .. " Der Spieler hat die Lobby verlassen.")
+        PAD.SET_CONTROL_VALUE_NEXT_FRAME(2, 201, 1)
+    elseif mess_hash == 1575023314 then
+        util.toast(sprefix .. " Lobby Timeout.")
+        PAD.SET_CONTROL_VALUE_NEXT_FRAME(2, 201, 1)
+    elseif mess_hash == 1446064540 then
+        util.toast(sprefix .. " Du bist bereits in der Lobby.")
+        PAD.SET_CONTROL_VALUE_NEXT_FRAME(2, 201, 1)
+    --          transaction error              join session             join session            leave session           leave online
+    elseif mess_hash == -991495373 or mess_hash == -587688989 or mess_hash == 15890625 or mess_hash == 99184332 or mess_hash == 1246147334 then
+        PAD.SET_CONTROL_VALUE_NEXT_FRAME(2, 201, 1)
+    elseif mess_hash ~= 0 then
+        util.toast(mess_hash, TOAST_CONSOLE)
+    end
+    util.yield()
+end)
+
+menu.toggle_loop(self, "Konversationen automatisch überspringen", {}, "", function()
+    if AUDIO.IS_SCRIPTED_CONVERSATION_ONGOING() then
+        AUDIO.SKIP_TO_NEXT_SCRIPTED_CONVERSATION_LINE()
+    end
+    util.yield()
+end)
+
+menu.toggle_loop(self, "Zwischensequenzen automatisch überspringen", {}, "", function()
+    CUTSCENE.STOP_CUTSCENE_IMMEDIATELY()
+    util.yield(100)
+end)
+
+menu.toggle_loop(self, "Schnell Respawnen", {}, "", function()
+    local gwobaw = memory.script_global(2672505 + 1684 + 756) -- Global_2672505.f_1684.f_756
+    if PED.IS_PED_DEAD_OR_DYING(players.user_ped()) then
+        GRAPHICS.ANIMPOSTFX_STOP_ALL()
+        memory.write_int(gwobaw, memory.read_int(gwobaw) | 1 << 1)
+    end
+end,
+    function()
+    local gwobaw = memory.script_global(2672505 + 1684 + 756)
+    memory.write_int(gwobaw, memory.read_int(gwobaw) &~ (1 << 1)) 
 end)
 
 menu.toggle(self, "Leiser Schritt", {}, "Entfernt die Geräusche die du beim gehen machst", function (toggle)
@@ -1026,7 +1072,7 @@ end)
 
 ---------------------
 ---------------------
--- Farhzeug
+-- Fahrzeug
 ---------------------
 ---------------------
 
@@ -1085,6 +1131,28 @@ end)
 ---------------------
 ---------------------
 
+become_host = menu.action(online, "Host Werden", {}, "Kickt Spieler bis du Host wirst.", function(type)
+                if InSession() then
+                    if players.get_host() ~= players.user() then
+                        local players_before_host = players.get_host_queue_position(players.user())
+                        menu.show_warning(become_host, type, "Warnung: Du wirst gleich".." "..players_before_host.." ".."Spieler kicken bis du host bist. Fortfahren?", function()
+                            if InSession() then
+                                while players.get_host() ~= players.user() do
+                                    local host = players.get_host()
+                                    if players.exists(host) then
+                                        menu.trigger_commands("ban"..players.get_name(host))
+                                    end
+                                    util.yield(50)
+                                end
+                                util.toast(sprefix .. " Du bist nun der Host")
+                            end
+                        end)
+                    else
+                        util.toast(sprefix .. " Du bist nun der Host")
+                    end
+                end
+            end)
+
 ---------------------
 ---------------------
 -- Online/Erkennungen
@@ -1104,8 +1172,8 @@ local detections = menu.list(online, "Erkennungen", {}, "")
         for _, pid in ipairs(players.list(false, true, true)) do
             local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
             local pos = ENTITY.GET_ENTITY_COORDS(ped, false)
-            for i, interior in ipairs(interior_stuff) do
-                if players.is_godmode(pid) and not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped) and get_spawn_state(pid) == 99 and get_interior_player_is_in(pid) == interior then
+            for _, id in ipairs(interior_stuff) do
+                if players.is_godmode(pid) and not players.is_in_interior(pid) and not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped) and get_spawn_state(pid) == 99 and get_interior_player_is_in(pid) == id then
                 util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt Godmode")
                 util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt Godmode")
                 break
@@ -1231,12 +1299,30 @@ menu.toggle_loop(modderdetections, "Zuschauen", {}, "Erkennt ob dir jemand zuguc
     end
 end)
 
+menu.toggle_loop(normaldetections, "Teleportation", {}, "", function()
+    for _, pid in ipairs(players.list(true, true, true)) do
+        local old_pos = players.get_position(pid)
+        util.yield(50)
+        local cur_pos = players.get_position(pid)
+        local distance_between_tp = v3.distance(old_pos, cur_pos)
+        for _, id in ipairs(interior_stuff) do
+            if get_interior_player_is_in(pid) == id and get_spawn_state(pid) ~= 0 and players.exists(pid) then
+                util.yield(100)
+                if distance_between_tp > 300.0 then
+                    util.toast(sprefix .. " " .. players.get_name(pid) .. " hat sich " .. SYSTEM.ROUND(distance_between_tp) .. " Meter Teleportiert")
+                    util.log(sprefix .. " " .. players.get_name(pid) .. " hat sich " .. SYSTEM.ROUND(distance_between_tp) .. " Meter Teleportiert")
+                end
+            end
+        end
+    end
+end)
+
 menu.toggle_loop(normaldetections, "Orbital Kanone", {}, "Erkennt ob jemand die Orbital Kanone benutzt.", function()
     for _, pid in ipairs(players.list(false, true, true)) do
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         if IsPlayerUsingOrbitalCannon(pid) and TASK.GET_IS_TASK_ACTIVE(ped, 135)then
             util.toast(sprefix .. " " .. players.get_name(pid) .. " ist bei der Orbital Kanone")
-                util.log(sprefix .. " " .. players.get_name(pid) .. " ist bei der Orbital Kanone")
+            util.log(sprefix .. " " .. players.get_name(pid) .. " ist bei der Orbital Kanone")
         end
     end
 end)
@@ -1245,8 +1331,9 @@ menu.toggle_loop(normaldetections, "Glitched Godmode", {}, "Erkennt ob jemand ei
     for _, pid in ipairs(players.list(false, true, true)) do
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         local pos = ENTITY.GET_ENTITY_COORDS(ped, false) 
+        local height = ENTITY.GET_ENTITY_HEIGHT_ABOVE_GROUND(ped)
         for _, id in ipairs(interior_stuff) do
-            if players.is_in_interior(pid) and players.is_godmode(pid) and not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped) and get_spawn_state(pid) == 99 and get_interior_player_is_in(pid) == id then
+            if players.is_in_interior(pid) and players.is_godmode(pid) and not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped) and get_spawn_state(pid) == 99 and get_interior_player_is_in(pid) == id and height >= 0.0 then
                 util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt Glitched Godmode")
                 util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt Glitched Godmode")
                 break
@@ -1275,15 +1362,37 @@ menu.toggle(protections, "Homophobie beenden", {}, "Kickt Homophobe Spieler", fu
 end)
 
 menu.toggle_loop(protections, "Anti-Beast", {}, "Verhindert, dass du in die Bestie verwandelt wirst, hält aber auch das Ereignis für andere auf.", function()
-    if SCRIPT.GET_NUMBER_OF_THREADS_RUNNING_THE_SCRIPT_WITH_THIS_HASH(util.joaat("am_hunt_the_beast")) > 0 then
-        local host
-        repeat
-            host = NETWORK.NETWORK_GET_HOST_OF_SCRIPT("am_hunt_the_beast", -1, 0)
-            util.yield()
-        until host ~= -1
-        util.toast(sprefix .. " " .. players.get_name(host) .. " hat Hunt The Beast gestartet. Beende es...")
-        util.log(sprefix .. " " .. players.get_name(host) .. " hat Hunt The Beast gestartet. Beende es...")
-        menu.trigger_command(menu.ref_by_path("Online>Session>Session Scripts>Hunt the Beast>Stop Script"))
+    if util.spoof_script("am_hunt_the_beast", SCRIPT.TERMINATE_THIS_THREAD) then
+        util.toast(sprefix .. "Skript Hunt The Beast entdeckt. Ich beende das Skript...")
+        util.log(sprefix .. "Skript Hunt The Beast entdeckt. Ich beende das Skript...")
+    end
+end)
+
+menu.toggle_loop(protections, "Transaktion Fehlgeschlagen blockieren", {}, "Verhindert, dass das Skript Fahrzeug zerstören böswillig verwendet wird, um dir den Transaktionsfehler zu zeigen.", function()
+    if util.spoof_script("am_destroy_veh", SCRIPT.TERMINATE_THIS_THREAD) then
+        util.toast(sprefix .. "Skript Fahrzeug zerstören entdeckt. Ich beendet das Skript...")
+        util.log(sprefix .. "Skript Fahrzeug zerstören entdeckt. Ich beendet das Skript...")
+    end
+end)
+
+menu.toggle_loop(protections, "Anti-Cage", {"anticage"}, "", function() -- I really, really, really fucking hate doors now.
+    local veh = PED.GET_VEHICLE_PED_IS_USING(players.user_ped())
+    local my_ents = {user, veh}
+    for i, obj in ipairs(entities.get_all_objects_as_handles()) do
+        local obj_ptr = entities.handle_to_pointer(obj)
+        local owner = entities.get_owner(obj_ptr)
+        for _, pid in ipairs(players.list(false, true, true)) do
+            for i, data in ipairs(my_ents) do
+                if ENTITY.IS_ENTITY_TOUCHING_ENTITY(data, obj) then
+                    ENTITY.SET_ENTITY_NO_COLLISION_ENTITY(obj, data, false)
+                    ENTITY.SET_ENTITY_NO_COLLISION_ENTITY(data, obj, false)
+                    if owner ~= players.user() and get_interior_player_is_in(owner) == 0 then
+                        util.toast("Blocked Possible Cage From " .. players.get_name(owner))
+                    end
+                end
+            end
+        end
+        SHAPETEST.RELEASE_SCRIPT_GUID_FROM_ENTITY(obj)
     end
 end)
 
@@ -1783,7 +1892,7 @@ local function player(pid)
     ---------------------
 
     local spieler_entfernen = menu.list(menu.player_root(pid), "Athego's Script: Spieler Entfernen", {}, "")
-        menu.divider(spieler_entfernen, "Anti-Modder")
+        menu.divider(spieler_entfernen, "Athego's Script: Spieler Entfernen")
 
     menu.action(spieler_entfernen, "Griefer Jesus", {}, "Nicht wirklich zuverlässig, funktioniert aber bei den meisten Menüs", function()
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
@@ -1939,6 +2048,81 @@ local function player(pid)
     local playertroll = menu.list(menu.player_root(pid), "Athego's Script: Trolling", {}, "")
         menu.divider(playertroll, "Trolling")
 
+    ---------------------
+    ---------------------
+    -- Spieler Liste/Trolling/Glitch Player
+    ---------------------
+    ---------------------
+
+    local glitch_player_list = menu.list(playertroll, "Glitch Player", {}, "")
+    local object_stuff = {
+        names = {
+            "Ferris Wheel",
+            "UFO",
+            "Cement Mixer",
+            "Scaffolding",
+            "Garage Door",
+            "Big Bowling Ball",
+            "Big Soccer Ball",
+            "Big Orange Ball",
+            "Stunt Ramp",
+
+        },
+        objects = {
+            "prop_ld_ferris_wheel",
+            "p_spinning_anus_s",
+            "prop_staticmixer_01",
+            "prop_towercrane_02a",
+            "des_scaffolding_root",
+            "prop_sm1_11_garaged",
+            "stt_prop_stunt_bowling_ball",
+            "stt_prop_stunt_soccer_ball",
+            "prop_juicestand",
+            "stt_prop_stunt_jump_l",
+        }
+    }
+
+    local object_hash = util.joaat("prop_ld_ferris_wheel")
+    menu.list_select(glitch_player_list, "Objekt", {}, "Objekt welches für Glitch Player benutzt wird", object_stuff.names, 1, function(index)
+        object_hash = util.joaat(object_stuff.objects[index])
+    end)
+
+    menu.slider(glitch_player_list, "Spawn Delay", {}, "", 150, 3000, 150, 10, function(amount)
+        delay = amount
+    end)
+
+    local glitchPlayer
+    glitchPlayer = player_toggle_loop(glitch_player_list, pid, "Glitch Player", {"glitchplayer"}, "Blockiert durch Menüs mit Spamschutz für Objekte.", function()
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local pos = ENTITY.GET_ENTITY_COORDS(ped, false)
+        if not players.exists(pid) then 
+            util.toast(sprefix .. "Spieler Existiert nicht")
+            util.log(sprefix .. "Spieler Existiert nicht")
+            menu.set_value(glitchPlayer, false)
+        util.stop_thread() end
+
+        if v3.distance(ENTITY.GET_ENTITY_COORDS(players.user_ped(), false), players.get_position(pid)) > 1000.0 
+        and v3.distance(pos, players.get_cam_pos(players.user())) > 1000.0 then
+            util.toast("Player is too far. :/")
+            menu.set_value(glitchPlayer, false)
+        return end
+
+        local glitch_hash = object_hash
+        local poopy_butt = util.joaat("rallytruck")
+        request_model(glitch_hash)
+        request_model(poopy_butt)
+        local stupid_object = entities.create_object(glitch_hash, pos)
+        local glitch_vehicle = entities.create_vehicle(poopy_butt, pos, 0)
+        ENTITY.SET_ENTITY_VISIBLE(stupid_object, false)
+        ENTITY.SET_ENTITY_VISIBLE(glitch_vehicle, false)
+        ENTITY.SET_ENTITY_INVINCIBLE(stupid_object, true)
+        ENTITY.SET_ENTITY_COLLISION(stupid_object, true, true)
+        ENTITY.APPLY_FORCE_TO_ENTITY(glitch_vehicle, 1, 0.0, 10, 10, 0.0, 0.0, 0.0, 0, 1, 1, 1, 0, 1)
+        util.yield(delay)
+        entities.delete_by_handle(stupid_object)
+        entities.delete_by_handle(glitch_vehicle)
+        util.yield(delay)     
+    end)
 
     ---------------------
     ---------------------
@@ -1973,7 +2157,7 @@ local function player(pid)
 
     ---------------------
     ---------------------
-    -- Spieler Liste/Trolling/Fahrezug
+    -- Spieler Liste/Trolling/Fahrzeug
     ---------------------
     ---------------------
 
@@ -2304,6 +2488,14 @@ local function player(pid)
         end
     end)
 
+    menu.action(playertroll, "Räumungsbefehl", {}, "", function()
+        if players.is_in_interior(pid) then
+            menu.trigger_commands("interiorkick" .. players.get_name(pid))
+        else
+            util.toast("Der Spieler befindet sich nicht in einem Innenraum :/")
+        end
+    end)
+
     menu.action(playertroll,  "Spieler aus dem Innenraum zwingen", {}, "Für die meisten Innenräume geeignet.", function() -- very innovative!
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         local pos = ENTITY.GET_ENTITY_COORDS(ped, false)
@@ -2378,7 +2570,7 @@ local function player(pid)
         menu.divider(anti_modder, "Anti-Modder")
 
     player_toggle_loop(anti_modder, pid, "Entferne Godmode", {}, "Wird von den meisten Menüs gegblockt", function()
-        util.trigger_script_event(1 << pid, {0xAD36AA57, pid, 0x96EDB12F, math.random(0, 0x270F)})
+        util.trigger_script_event(1 << pid, {113023613, pid, 1771544554, math.random(0, 9999)})
     end)
 
     player_toggle_loop(anti_modder, pid, "Entferne Fahrzeug Godmode", {}, "Wird von den meisten Menüs gegblockt", function()
@@ -2406,43 +2598,32 @@ local function player(pid)
         MISC.SHOOT_SINGLE_BULLET_BETWEEN_COORDS(pos.x, pos.y, pos.z + 1, pos.x, pos.y, pos.z, 99999, true, util.joaat("weapon_stungun"), players.user_ped(), false, true, 1.0)
     end)
 
-    menu.slider_text(kill_godmode, "Zerdrücken", {}, "", {"Khanjali", "APC"}, function(index, veh)
+    menu.action(kill_godmode, "Töte Godmode Spieler", {}, "Zerquetscht sie, bis sie sterben. Funktioniert bei den meisten Menüs. (Hinweis: Funktioniert nicht, wenn die Person NO RAGDOLL benutzt).", function()
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         local pos = ENTITY.GET_ENTITY_COORDS(ped)
-        local vehicle = util.joaat(veh)
-        request_model(vehicle)
-
-        pluto_switch veh do
-            case "Khanjali":
-            height = 2.8
-            offset = 0
-            break
-            case "APC":
-            height = 3.4
-            offset = -1.5
-            break
-        end
+        local khanjali = util.joaat("khanjali")
+        request_model(khanjali)
 
         if TASK.IS_PED_STILL(ped) then
-            distance = 0
+            distance = 0.0
         elseif not TASK.IS_PED_STILL(ped) then
-            distance = 3
+            distance = 2.0
         end
 
-        local vehicle1 = entities.create_vehicle(vehicle, ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(ped, offset, distance, height), ENTITY.GET_ENTITY_HEADING(ped))
-        local vehicle2 = entities.create_vehicle(vehicle, pos, 0)
-        local vehicle3 = entities.create_vehicle(vehicle, pos, 0)
-        local vehicle4 = entities.create_vehicle(vehicle, pos, 0)
-        local spawned_vehs = {vehicle4, vehicle3, vehicle2, vehicle1}
-        ENTITY.ATTACH_ENTITY_TO_ENTITY(vehicle2, vehicle1, 0, 0, 3, 0, 0, 0, -180, 0, false, true, false, 0, true)
-        ENTITY.ATTACH_ENTITY_TO_ENTITY(vehicle3, vehicle1, 0, 3, 3, 0, 0, 0, -180, 0, false, true, false, 0, true)
-        ENTITY.ATTACH_ENTITY_TO_ENTITY(vehicle4, vehicle1, 0, 3, 0, 0, 0, 0, 0, 0, false, true, false, 0, true)
+        local vehicle1 = entities.create_vehicle(khanjali, ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(ped, 0.0, distance, 2.8), ENTITY.GET_ENTITY_HEADING(ped))
+        local vehicle2 = entities.create_vehicle(khanjali, pos, 0)
+        local vehicle3 = entities.create_vehicle(khanjali, pos, 0)
+        local vehicle4 = entities.create_vehicle(khanjali, pos, 0)
+        local spawned_vehs = {vehicle1, vehicle2, vehicle3, vehicle4}
+        ENTITY.ATTACH_ENTITY_TO_ENTITY(vehicle2, vehicle1, 0.0, 0.0, 3.0, 0.0, 0.0, 0.0, -180.0, 0, false, true, false, 0, true)
+        ENTITY.ATTACH_ENTITY_TO_ENTITY(vehicle3, vehicle1, 0.0, 3.0, 3.0, 0.0, 0.0, 0.0, -180.0, 0, false, true, false, 0, true)
+        ENTITY.ATTACH_ENTITY_TO_ENTITY(vehicle4, vehicle1, 0.0, 3.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0, false, true, false, 0, true)
         ENTITY.SET_ENTITY_VISIBLE(vehicle1, false)
         util.yield(5000)
         for i = 1, #spawned_vehs do
             entities.delete_by_handle(spawned_vehs[i])
         end
-    end)
+    end) 
 
 
 
