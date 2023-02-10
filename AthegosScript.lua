@@ -11,7 +11,7 @@ util.require_natives("natives-1672190175-uno")
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.16)                                           --Aktuelle Script Version
+sversion = tonumber(0.15)                                           --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -1174,8 +1174,8 @@ local detections = menu.list(online, "Erkennungen", {}, "")
             local pos = ENTITY.GET_ENTITY_COORDS(ped, false)
             for _, id in ipairs(interior_stuff) do
                 if players.is_godmode(pid) and not players.is_in_interior(pid) and not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped) and get_spawn_state(pid) == 99 and get_interior_player_is_in(pid) == id then
-                util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt Godmode")
-                util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt Godmode")
+                    util.draw_debug_text(sprefix .. " " .. players.get_name(pid) .. " benutzt Godmode")
+                    util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt Godmode")
                 break
             end
         end
@@ -1193,7 +1193,6 @@ menu.toggle_loop(modderdetections, "Fahrzeug Godmode", {}, "Erkennt ob jemand Fa
                 if not ENTITY.GET_ENTITY_CAN_BE_DAMAGED(vehicle) and not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped) and get_spawn_state(pid) == 99 and get_interior_player_is_in(pid) == id then
                     util.draw_debug_text(sprefix .. " " .. players.get_name(pid) .. " benutzt Vehicle Godmode")
                     util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt Vehicle Godmode")
-                    util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt Vehicle Godmode")
                     break
                 end
             end
