@@ -11,7 +11,7 @@ util.require_natives("natives-1672190175-uno")
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.17)                                           --Aktuelle Script Version
+sversion = tonumber(0.18)                                           --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -793,6 +793,23 @@ local interiors = {
 }
 
 local interior_stuff = {0, 233985, 169473, 169729, 169985, 170241, 177665, 177409, 185089, 184833, 184577, 163585, 167425, 167169}
+
+local doors = {
+    "v_ilev_ml_door1",
+    "v_ilev_ta_door",
+    "v_ilev_247door",
+    "v_ilev_247door_r",
+    "v_ilev_lostdoor",
+    "v_ilev_bs_door",
+    "v_ilev_cs_door01",
+    "v_ilev_cs_door01_r",
+    "v_ilev_gc_door03",
+    "v_ilev_gc_door04",
+    "v_ilev_clothmiddoor",
+    "v_ilev_clothmiddoor",
+    "prop_shop_front_door_l",
+    "prop_shop_front_door_r"
+}
 
 ---------------------
 ---------------------
