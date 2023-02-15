@@ -11,7 +11,7 @@ util.require_natives("natives-1672190175-uno")
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.19)                                           --Aktuelle Script Version
+sversion = tonumber(0.20)                                           --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -169,6 +169,7 @@ end
 -- functions für Fahrzeug Mods
 ---------------------
 ---------------------
+
 
 local function kick_from_veh(pid)
     menu.trigger_commands("vehkick" .. players.get_name(pid))
@@ -647,6 +648,15 @@ local modded_vehicles = {
     "towtruck",
     "towtruck2",
     "cargoplane",
+}
+
+local things = {
+    "brickade2",
+    "hauler",
+    "hauler2",
+    "manchez3",
+    "terbyte",
+    "minitank"
 }
 
 ---------------------
@@ -1238,6 +1248,26 @@ become_host = menu.action(online, "Host Werden", {}, "Kickt Spieler bis du Host 
                 end
             end)
 
+local block_orb
+block_orb = menu.toggle_loop(online,  "Orbital Kanone Blocken", {"blockorb"}, "Spwant ein Objekt, welches den Raum für die Orbitalkanone blockiert.", function() -- credit to lance, just cleaned it up a bit.
+    local mdl = util.joaat("h4_prop_h4_garage_door_01a")
+    RequestModel(mdl)
+    if orb_obj == nil or not ENTITY.DOES_ENTITY_EXIST(orb_obj) then
+        orb_obj = entities.create_object(mdl, v3(335.9, 4833.9, -59.0))
+        local obj_id = NETWORK.NETWORK_GET_NETWORK_ID_FROM_ENTITY(orb_obj)
+        NETWORK.SET_NETWORK_ID_CAN_MIGRATE(obj_id, false)
+        ENTITY.SET_ENTITY_HEADING(orb_obj, 125.0)
+        ENTITY.FREEZE_ENTITY_POSITION(orb_obj, true)
+        ENTITY.SET_ENTITY_NO_COLLISION_ENTITY(players.user_ped(), orb_obj, false)
+    end
+    util.yield(50)
+end, function()
+    if orb_obj ~= nil then
+        entities.delete_by_handle(orb_obj)
+    end
+end)
+
+
 ---------------------
 ---------------------
 -- Online/Erkennungen
@@ -1283,21 +1313,6 @@ local detections = menu.list(online, "Erkennungen", {}, "")
             end
         end 
     end)
-
-menu.toggle_loop(modderdetections, "Nicht veröffentliches Fahrzeug", {}, "Erkennt ob jemand ein Fahrzeug benutzt welches noch nicht veröffentlicht wurde", function()
-    for _, pid in ipairs(players.list(false, true, true)) do
-        local modelHash = players.get_vehicle_model(pid)
-        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
-        local vehicle = PED.GET_VEHICLE_PED_IS_USING(ped)
-        local PedID = NETWORK.NETWORK_GET_PLAYER_INDEX_FROM_PED(VEHICLE.GET_PED_IN_VEHICLE_SEAT(vehicle, -1))
-        for i, name in ipairs(unreleased_vehicles) do
-            if modelHash == util.joaat(name) and PED.IS_PED_IN_ANY_VEHICLE(ped, false) then
-                util.toast(sprefix .. " " .. players.get_name(pid) .. " fährt ein unveröffentliches Fahrzeug " .. "(" .. name .. ")")
-                util.log(sprefix .. " " .. players.get_name(pid) .. " fährt ein unveröffentliches Fahrzeug " .. "(" .. name .. ")")
-            end
-        end
-    end
-end)
 
 menu.toggle_loop(modderdetections, "Gemoddete Waffe", {}, "Erkennt ob jemand eine Waffe benutzt die man Online nicht haben kann.", function()
     for _, pid in ipairs(players.list(false, true, true)) do
@@ -1410,14 +1425,24 @@ menu.toggle_loop(modderdetections, "Modded Orbital Kanone", {}, "Erkennt ob jema
 end)
 
 menu.toggle_loop(modderdetections, "Gespawntes Fahrzeug", {}, "Erkennt ob jemand ein gespawntes Fahrzeug fährt.", function()
-    for _, pid in players.list(false, true, true) do
+    for _, pid in players.list(true, true, true) do
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         local vehicle = PED.GET_VEHICLE_PED_IS_USING(ped)
+        local hash = players.get_vehicle_model(pid)
         local driver = NETWORK.NETWORK_GET_PLAYER_INDEX_FROM_PED(VEHICLE.GET_PED_IN_VEHICLE_SEAT(vehicle, -1))
-        if players.get_name(pid) ~= "InvalidPlayer" and players.get_vehicle_model(pid) ~= 0 then
-            if DECORATOR.DECOR_GET_INT(vehicle, "MPBitset") == 8 or DECORATOR.DECOR_GET_INT(vehicle, "MPBitset") == 1024 and PED.IS_PED_IN_ANY_VEHICLE(ped, false) and GetSpawnState(players.user()) ~= 0 then 
+        for i, veh in things do -- because getting the decor int for them didnt want to work
+            if hash == util.joaat(veh) and DECORATOR.DECOR_GET_INT(vehicle, "MPBitset") == 8 then
+            return end
+        end
+        if players.get_name(pid) ~= "InvalidPlayer" and players.get_vehicle_model(pid) ~= 0 and GetSpawnState(players.user()) ~= 0 then
+            if DECORATOR.DECOR_GET_INT(vehicle, "MPBitset") == 8 or DECORATOR.DECOR_GET_INT(vehicle, "MPBitset") == 1024 and not IsPlayerInRcBandito(pid) and not IsPlayerInRcTank(pid) then 
+                for _, name in unreleased_vehicles do
+                    if hash == util.joaat(name) and pid == driver then
+                        util.draw_debug_text(sprefix .. " " .. players.get_name(pid) .. " fährt ein unveröffentliches Fahrzeug " .. "(" .. name .. ")")
+                        return
+                    end
+                end
                 util.draw_debug_text(sprefix .. " " .. players.get_name(driver) .. " benutzt ein gespawntes Fahrzeug " .. "(Fahrzeug: " .. util.reverse_joaat(players.get_vehicle_model(pid)) .. ")")
-                util.toast(sprefix .. " " .. players.get_name(driver) .. " benutzt ein gespawntes Fahrzeug " .. "(Fahrzeug: " .. util.reverse_joaat(players.get_vehicle_model(pid)) .. ")")
                 break
             end
         end
@@ -1557,10 +1582,11 @@ menu.toggle_loop(anticage, "Anti Käfig aktivieren", {"anticage"}, "", function(
 end)
 
 local block_spec_syncs
-block_spec_syncs = menu.toggle_loop(protections, "Block Spectator Syncs", {}, "Block all syncs with people who spectate you.", function()
+block_spec_syncs = menu.toggle_loop(protections, "Block Spectator Syncs", {}, "Blockiert alle Synchronisationen mit Leuten, die dir zugucken.", function()
     for _, pid in players.list(false, true, true) do
+        local cam_dist = v3.distance(players.get_position(players.user()), players.get_cam_pos(pid))
         local ped_dist = v3.distance(players.get_position(players.user()), players.get_position(pid))
-        if v3.distance(players.get_position(players.user()), players.get_cam_pos(pid)) < 25.0 and ped_dist > 30.0 or players.get_spectate_target(pid) == players.user() then
+        if cam_dist < 25.0 and ped_dist > 75.0 and not PED.IS_PED_DEAD_OR_DYING(ped) then
             local outgoingSyncs = menu.ref_by_rel_path(menu.player_root(pid), "Outgoing Syncs>Block")
             outgoingSyncs.value = true
             pos = players.get_position(players.user())
@@ -2138,6 +2164,10 @@ local function player(pid)
     local friendly = menu.list(menu.player_root(pid), "Athego's Script: Freundlich", {}, "")
         menu.divider(friendly, "Athego's Script: Freundlich")
 
+    menu.action(friendly, "Gib ihm Level", {}, "Verleiht ihnen ~175k RP. Kann einem mit Level 1 circa 25 Level geben.", function()
+        menu.trigger_commands("givecollectibles" .. players.get_name(pid))
+    end)
+
     local firw = {speed = 1000}
     menu.toggle_loop(friendly, 'Feuerwerkshow', {'feuerw'}, 'Zünde ein Feuerwerk am Standort des Spielers', function ()
         local targets = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
@@ -2243,7 +2273,7 @@ local function player(pid)
     ---------------------
 
     local playertroll = menu.list(menu.player_root(pid), "Athego's Script: Trolling", {}, "")
-        menu.divider(playertroll, "Trolling")
+        menu.divider(playertroll, "Athego's Script: Trolling")
 
     ---------------------
     ---------------------
@@ -2317,8 +2347,16 @@ local function player(pid)
         entities.delete_by_handle(veh)
     end)
 
+    local glitch_veh_root = menu.list(playertroll, "Glitch Fahrzeug", {}, "")
+    menu.divider(glitch_veh_root, "Glitch Fahrzeug")
+
+    local obj_hash = util.joaat("prop_ld_ferris_wheel")
+    menu.list_select(glitch_veh_root, "Objekt", {"glitchplayer"}, "Objekt welches zum glitchen benutzt wird.", object_stuff.names, 1, function(index)
+        obj_hash = util.joaat(object_stuff.objects[index])
+    end)
+
     local glitchveh
-    glitchveh = menu.toggle_loop(glitch_player_list, "Glitch Fahrzeug", {}, "Blockiert durch Menüs mit Spamschutz gegen Objekte.", function() -- credits to soul reaper for base concept
+    glitchveh = menu.toggle_loop(glitch_veh_root, "Glitch Fahrzeug", {}, "Blockiert durch Menüs mit Spamschutz gegen Objekte.", function() -- credits to soul reaper for base concept
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         local pos = players.get_position(pid)
         local player_veh = PED.GET_VEHICLE_PED_IS_USING(ped)
@@ -2371,7 +2409,7 @@ local function player(pid)
     end)
 
     local glitchforcefield
-    glitchforcefield = player_toggle_loop(glitch_player_list, pid, "Glitched Forcefield", {}, "Blockiert durch Menüs mit Spamschutz gegen Objekte.", function()
+    glitchforcefield = player_toggle_loop(playertroll, pid, "Glitched Forcefield", {}, "Blockiert durch Menüs mit Spamschutz gegen Objekte.", function()
         local glitch_hash = util.joaat("p_spinning_anus_s")
         RequestModel(glitch_hash)
 
@@ -2380,12 +2418,12 @@ local function player(pid)
         pos.z += 2.5
 
         if not ENTITY.DOES_ENTITY_EXIST(ped) then
-            util.toast(sprefix .. "" .. players.get_name(pid) .." ist zu weit weg")
+            util.toast(sprefix .. " " .. players.get_name(pid) .." ist zu weit weg")
             glitchforcefield.value = false
         util.stop_thread() end
 
         if PED.IS_PED_IN_ANY_VEHICLE(ped, false) then
-            util.toast(sprefix .. "" .. players.get_name(pid) .." ist in einem Fahrzeug")
+            util.toast(sprefix .. " " .. players.get_name(pid) .." ist in einem Fahrzeug")
             glitchforcefield.value = false
         util.stop_thread() end
 
@@ -2394,6 +2432,27 @@ local function player(pid)
         ENTITY.SET_ENTITY_COLLISION(obj, true, true)
         util.yield()
         entities.delete_by_handle(obj) 
+    end)
+
+    local gravity = menu.list(playertroll, "Spieler schweben lassen", {}, "Funktioniert bei allen Menüs, kann aber erkannt werden. Funktioniert nicht bei Spielern mit Godmode.")
+    local force = 1.00
+    menu.slider_float(gravity, "Schwebe-Kraft", {}, "", 0, 100, 100, 10, function(value)
+        force = value / 100
+    end)
+
+    local gravitate
+    gravitate = player_toggle_loop(gravity, pid, "Spieler Schweben", {"gravitate"}, "", function()
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local vehicle = PED.GET_VEHICLE_PED_IS_IN(ped)
+
+        for _, id in interior_stuff do
+            if players.is_godmode(pid) and (not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped)) and GetSpawnState(pid) ~= 0 and GetInteriorPlayerIsIn(pid) == id then
+                util.toast(sprefix .. " " .. players.get_name(pid) .." benutzt Godmode")
+                gravitate.value = false
+            util.stop_thread() end
+        end
+
+        FIRE.ADD_EXPLOSION(players.get_position(pid), 29, force, false, true, 0.0, true)
     end)
 
     ---------------------
@@ -2665,12 +2724,12 @@ local function player(pid)
         --npc_jack(pid, false)
     --end)
 
-    menu.action(playertrollnpc, "Fahrzeug klauen", {"hijack"}, "Erzeugt ein Ped, das sie aus ihrem Fahrzeug holt und wegfährt.", function()
+    menu.action(playertrollnpc, "Fahrzeug klauen", {}, "Erzeugt ein Ped, das sie aus ihrem Fahrzeug holt und wegfährt.", function()
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         local pos = players.get_position(pid)
         local vehicle = PED.GET_VEHICLE_PED_IS_USING(ped)
 
-        if not PED.IS_PED_IN_VEHICLE(ped, vehicle, false) then
+        if not PED.IS_PED_IN_ANY_VEHICLE(ped, false) then
             util.toast(lang.get_localised(1067523721):gsub("{}", players.get_name(pid)))
         return end
 
@@ -2684,21 +2743,27 @@ local function player(pid)
         PED.CAN_PED_RAGDOLL(spawned_ped, false)
         PED.SET_PED_CONFIG_FLAG(spawned_ped, 26, true)
         TASK.TASK_ENTER_VEHICLE(spawned_ped, vehicle, 1000, -1, 1.0, 2|8|16)
-        util.yield(2500)
-        TASK.TASK_VEHICLE_DRIVE_WANDER(spawned_ped, vehicle, 9999.0, 6)
-        util.yield(2500)
-        if not PED.IS_PED_IN_ANY_VEHICLE(spawned_ped, false) then
+        util.yield(1500)
+        if TASK.GET_IS_TASK_ACTIVE(ped, 2) then
+            repeat
+                util.yield()
+            until not TASK.GET_IS_TASK_ACTIVE(ped, 2) or PED.IS_PED_IN_ANY_VEHICLE(spawned_ped, false)
+            TASK.TASK_VEHICLE_DRIVE_WANDER(spawned_ped, vehicle, 9999.0, 6)
+            util.toast(sprefix .. " Sein Auto ist jetzt deins :D")
+        else
+            util.toast(sprefix .. " Fehler beim Auto Diebstahl.")
             entities.delete_by_handle(spawned_ped)
         end
-        if PED.IS_PED_IN_VEHICLE(ped, vehicle, false) then
-            util.toast(sprefix .. " Fehler beim Auto Diebstahl.")
-        else
-            util.toast(sprefix .. " Sein Auto ist jetzt deins :D")
+        if not TASK.GET_IS_TASK_ACTIVE(spawned_ped) then
+            repeat
+            TASK.TASK_VEHICLE_DRIVE_WANDER(spawned_ped, vehicle, 9999.0, 6) -- giving task again cus doesnt work sometimes
+            util.yield()
+            until TASK.GET_IS_TASK_ACTIVE(spawned_ped)
         end
-        TASK.TASK_VEHICLE_DRIVE_WANDER(spawned_ped, vehicle, 9999.0, 6) -- setting task a 2nd time since it seems to solve any issues of the ped not wandering off.
     end)
 
     local hijack
+    local fail_count = 0
     hijack = player_toggle_loop(playertrollnpc, pid, "Fahrzeug automatisch klauen", {}, "Wird jedes Auto entführen in das er einsteigt.", function()
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         local pos = players.get_position(pid)
@@ -2715,14 +2780,29 @@ local function player(pid)
             PED.CAN_PED_RAGDOLL(spawned_ped, false)
             PED.SET_PED_CONFIG_FLAG(spawned_ped, 26, true)
             TASK.TASK_ENTER_VEHICLE(spawned_ped, vehicle, 1000, -1, 1.0, 2|8|16)
-            util.yield(2500)
-            TASK.TASK_VEHICLE_DRIVE_WANDER(spawned_ped, vehicle, 9999.0, 6) 
-            util.yield(2500)
-            if not PED.IS_PED_IN_ANY_VEHICLE(spawned_ped, false) then
+            util.yield(1000)
+            if TASK.GET_IS_TASK_ACTIVE(ped, 2) then
+                repeat
+                    util.yield()
+                until not TASK.GET_IS_TASK_ACTIVE(ped, 2)
+            end
+            if fail_count >= 5 then
+                util.toast(sprefix .. " Das klauen des Spielerfahrzeugs ist zu oft fehlgeschlagen. Funktion wird deaktivieren...")
+                fail_count = 0
+                hijack.value = false
+            end
+            if PED.IS_PED_IN_ANY_VEHICLE(spawned_ped, false) then
+                util.yield(1500)
+                TASK.TASK_VEHICLE_DRIVE_WANDER(spawned_ped, vehicle, 9999.0, 6)
+                fail_count = 0
+            else
+                fail_count += 1
                 entities.delete_by_handle(spawned_ped)
             end
-            TASK.TASK_VEHICLE_DRIVE_WANDER(spawned_ped, vehicle, 9999.0, 6)
+            util.yield(500)
         end
+    end, function()
+        fail_count = 0
     end)
 
     local kidnap_types = {"LKW", "Helikopter"}
@@ -2883,13 +2963,6 @@ local function player(pid)
         util.trigger_script_event(1 << pid, {1742713914, players.user(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
     end)
 
-    menu.action(playertroll, "Zum Golf schicken", {""}, "Schickt den Spieler zum Golfspielen.", function()
-        if StandUser(pid) then util.toast(stand_notif) return end
-        local int = memory.read_int(memory.script_global(1894573 + 1 + (pid * 608) + 510))
-        util.trigger_script_event(1 << pid, {-95341040, players.user(), 116, 0, 0, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, int})
-        util.trigger_script_event(1 << pid, {1742713914, players.user(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
-    end)
-
     menu.action(playertroll, "Break Freemode", {}, "Nach der benutzung können sie die Spielerliste nicht mehr sehen, das Interaktionsmenü nicht mehr benutzen und sehen die meisten Blips nicht mehr auf der Karte.", function()
         if StandUser(pid) then util.toast(stand_notif) return end
         local int = memory.read_int(memory.script_global(1894573 + 1 + (pid * 608) + 510))
@@ -2902,6 +2975,75 @@ local function player(pid)
         local int = memory.read_int(memory.script_global(1894573 + 1 + (pid * 608) + 510))
         util.trigger_script_event(1 << pid, {-95341040, players.user(), 197, 0, 0, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, int})
         util.trigger_script_event(1 << pid, {1742713914, players.user(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
+    end)
+
+    local arcadegames = menu.list(playertroll, "In Arkade Spiele zwingen")
+    menu.divider(arcadegames, "In Arkade Spiele zwingen")
+    local arcade_games = {
+        [210] = "Race And Chase",
+        [211] = "Gunslinger",
+        [212] = "Wizards Ruin",
+        [216] = "Go Go Space Monkey",
+    }
+
+    for id, name in arcade_games do
+        menu.action(arcadegames, name, {}, "Zwingt den Spieler, ein Arcade-Spiel zu spielen.", function()
+            if StandUser(pid) then util.toast(stand_notif) return end
+            local int = memory.read_int(memory.script_global(1894573 + 1 + (pid * 608) + 510))
+            util.trigger_script_event(1 << pid, {-95341040, players.user(), id, 0, 0, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, int})
+            util.trigger_script_event(1 << pid, {1742713914, players.user(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
+        end)
+    end
+
+    local forcejobs = menu.list(playertroll, "Zu Aktivität zwingen")
+    menu.divider(forcejobs, "Zu Aktivität zwingen")
+    local activities = {
+        [192] = "Dart",
+        [193] = "Golf",
+    }
+
+    for id, name in activities do
+        menu.action(forcejobs, name, {}, "Zwingt den Spieler zu einer Aktivität.", function()
+            if StandUser(pid) then util.toast(stand_notif) return end
+            local int = memory.read_int(memory.script_global(1894573 + 1 + (pid * 608) + 510))
+            util.trigger_script_event(1 << pid, {-95341040, players.user(), id, 0, 0, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, int})
+            util.trigger_script_event(1 << pid, {1742713914, players.user(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
+        end)
+    end
+
+    menu.action(playertroll, "Spieler katapultieren", {}, "Funktioniert bei den meisten Menüs.", function()
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local mdl = util.joaat("boxville3")
+        local pos = players.get_position(pid)
+        RequestModel(mdl)
+                    
+        if PED.IS_PED_IN_ANY_VEHICLE(ped, false) then
+            util.toast(sprefix .. " " .. players.get_name(pid) .." ist in einem Fahrzeug.")
+        return end
+        
+        if TASK.IS_PED_WALKING(ped) then
+            boxville = entities.create_vehicle(mdl, ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(ped, 0.0, 2.0, 0.0), ENTITY.GET_ENTITY_HEADING(ped))
+            ENTITY.SET_ENTITY_VISIBLE(boxville, false)
+            util.yield(250)
+            repeat
+                if v3.distance(players.get_position(pid), ENTITY.GET_ENTITY_COORDS(boxville)) < 10.0 then
+                    if boxville ~= 0 and ENTITY.DOES_ENTITY_EXIST(boxville)then
+                        ENTITY.APPLY_FORCE_TO_ENTITY(boxville, 1, 0.0, 0.0, 25.0, 0.0, 0.0, 0.0, 0, 1, 1, 1, 0, 1)
+                    end
+                    util.yield()
+                else
+                    entities.delete_by_handle(boxville)
+                end
+                util.yield()
+                pos = players.get_position(pid)
+            until pos.z > 10000.0
+            util.yield(100)
+            if boxville ~= 0 and ENTITY.DOES_ENTITY_EXIST(boxville) then 
+                entities.delete_by_handle(boxville)
+            end
+        else
+            util.toast(sprefix .. " " .. players.get_name(pid) .." muss gehen damit es funktioniert.")
+        end
     end)
 
     menu.action(playertroll, "Herzinfarkt", {}, "Führt dazu, dass der Spieler einen Herzinfarkt erleidet und stirbt.", function(on)
@@ -2918,12 +3060,21 @@ local function player(pid)
         end
     end)
 
+    menu.action(playertroll, "Innenraum Status verändern", {}, "Kann durch erneuten Beitritt rückgängig gemacht werden. Der Spieler muss sich in einer Wohnung befinden. Funktioniert bei den meisten Menüs.", function()
+        if StandUser(pid) then util.toast(stand_notif) return end
+        if players.is_in_interior(pid) then
+            util.trigger_script_event(1 << pid, {629813291, players.user(), pid, pid, pid, math.random(int_min, int_max), pid})
+        else
+            util.toast(sprefix .. " " .. players.get_name(pid) .." befindet sich in keinem Innenraum :/")
+        end
+    end)
+
     menu.action(playertroll, "Spieler in Gebäude töten", {}, "Geeignet für die meisten Innenräume.", function()
         local pos = players.get_position(pid)
 
         for _, id in interior_stuff do
             if GetInteriorPlayerIsIn(pid) == id then
-                util.toast(sprefix .. " " .. players.get_name(pid) .." Der Spieler befindet sich in keinem Innenraum :/")
+                util.toast(sprefix .. " " .. players.get_name(pid) .." befindet sich in keinem Innenraum :/")
             return end
             if GetInteriorPlayerIsIn(pid) ~= id then
                 util.trigger_script_event(1 << pid, {-1428749433, players.user(), 448051697, math.random(0, 9999)})
@@ -2942,7 +3093,7 @@ local function player(pid)
         request_model(poopy_butt)
         for i, interior in ipairs(interior_stuff) do
             if get_interior_player_is_in(pid) == interior then
-                util.toast(sprefix .. " Der Spieler befindet sich in keinem Innenraum :/")
+                util.toast(sprefix .. " " .. players.get_name(pid) .." befindet sich in keinem Innenraum :/")
             return end
         end
         for i = 1, 5 do
