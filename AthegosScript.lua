@@ -11,7 +11,7 @@ util.require_natives("natives-1672190175-uno")
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.20)                                           --Aktuelle Script Version
+sversion = tonumber(0.21)                                           --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -608,6 +608,8 @@ local values = {
     [4] = 208,
 }
 
+local invites = {"Yacht", "Office", "Clubhouse", "Office Garage", "Custom Auto Shop", "Apartment"}
+
 ---------------------
 ---------------------
 -- Unveröffentlichte Fahrzeuge
@@ -617,7 +619,6 @@ local values = {
 local unreleased_vehicles = {
     "virtue",
     "broadway",
-    "panthere",
     "everon2",
     "eudora",
     "boor"
@@ -2888,34 +2889,52 @@ local function player(pid)
 
     ---------------------
     ---------------------
-    -- Spieler Liste/Trolling/Chat troll
+    -- Spieler Liste/Trolling/Unendlicher Ladebildschirm
     ---------------------
     ---------------------
 
-    --local playertrollchat = menu.list(playertroll, "Chat Trolling", {}, "")
-        --menu.divider(playertrollchat, "Chat Trolling")
+    local playertrollinfinite_loading = menu.list(playertroll, "Unendlicher Ladebildschirm", {}, "")
+        menu.divider(playertrollinfinite_loading, "Unendlicher Ladebildschirm")
 
-   -- menu.action(playertrollchat, "Schizo-Nachricht senden", {"schizo"}, "Sendet ihnen eine Chat-Nachricht, die normal aussieht, aber nur sie selbst sehen können. Lässt sie schizophren aussehen, wenn sie antworten", function(click_type)
-        --util.show_corner_help(sprefix .. " Bitte gib die Nachricht ein")
-        --menu.show_command_box("schizo" .. players.get_name(pid) .. " ")
-        --end, function(on_command)
-           -- if #on_command > 140 then
-               -- util.toast(sprefix .. " Die Nachricht ist zu lang")
-           -- else
-             --   chat.send_targeted_message(pid, players.user(), on_command, false)
-            --    util.toast(sprefix .. " Nachricht gesendet!")
-          --  end
-   -- end)
+    menu.action(playertrollinfinite_loading, "MC Teleport Methode", {}, "Von den Meisten Menüs blockiert.", function()
+        if StandUser(pid) then util.toast(stand_notif) return end
+        util.trigger_script_event(1 << pid, {891653640, players.user(), 0, 32, NETWORK.NETWORK_HASH_FROM_PLAYER_HANDLE(pid), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
+    end)
 
-   -- menu.action(playertrollchat, "Falsche RAC Erkennung", {"fakerac"}, "Der Benutzer hat eine Erkennung ausgelöst: Rockstar Anti Cheat", function(click_type)
-    --    local types = {'I3', 'C1'}
-     --   local det_type = types[math.random(1, #types)]
-    --    chat.send_message('> ' .. players.get_name(pid) .. " triggered a detection: Rockstar Anti Cheat (" .. det_type .. ")", false, true, true)
-    --end)
-
-    --menu.action(playertrollchat, "Falsche Knockoff Breakup Erkennung", {}, "", function(click_type)
-     --   chat.send_message("> Knockoff Breakup Kick from " .. players.get_name(pid) .. " against " .. players.get_name(players.user()), false, true, true)
-    --end)
+    menu.action(playertrollinfinite_loading, "Apartment Methode", {}, "Von den Meisten Menüs blockiert.", function()
+        if StandUser(pid) then util.toast(stand_notif) return end
+        util.trigger_script_event(1 << pid, {-1796714618, players.user(), 0, 1, id})
+    end)
+        
+    menu.action_slider(playertrollinfinite_loading, "Kaputte Handy Einladung", {}, "", invites, function(index, name)
+        if StandUser(pid) then util.toast(stand_notif) return end
+        switch name do
+            case "Yacht":
+                util.trigger_script_event(1 << pid, {36077543, players.user(), 1})
+                util.toast(sprefix .. " Yacht einladung verschickt.")
+            break
+            case "Office":
+                util.trigger_script_event(1 << pid, {36077543, players.user(), 2})
+                util.toast(sprefix .. " Büro einladung verschickt.")
+            break
+            case "Clubhouse":
+                util.trigger_script_event(1 << pid, {36077543, players.user(), 3})
+                util.toast(sprefix .. " Clubhaus einladung verschickt.")
+            break
+            case "Office Garage":
+                util.trigger_script_event(1 << pid, {36077543, players.user(), 4})
+                util.toast(sprefix .. " Bürogaragen einladung verschickt.")
+            break
+            case "Custom Auto Shop":
+                util.trigger_script_event(1 << pid, {36077543, players.user(), 5})
+                util.toast(sprefix .. " Auto Shop einladung verschickt.")
+            break
+            case "Apartment":
+                util.trigger_script_event(1 << pid, {36077543, players.user(), 6})
+                util.toast(sprefix .. " Apartment einladung verschickt.")
+            break
+        end
+    end)
 
     ---------------------
     ---------------------
@@ -2955,6 +2974,48 @@ local function player(pid)
     -- Spieler Liste/Trolling
     ---------------------
     ---------------------
+
+    local jesus_tgl = false
+    local jesus_ped
+    menu.toggle(playertroll, "Griefer Jesus", {""}, "", function(toggled)
+        if toggled then
+            local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+            local pos = players.get_position(pid)
+            local jesus = util.joaat("u_m_m_jesus_01")
+            RequestModel(jesus)
+    
+            jesus_ped = entities.create_ped(26, jesus, pos, 0)
+            ENTITY.SET_ENTITY_INVINCIBLE(jesus_ped, true)
+            WEAPON.GIVE_WEAPON_TO_PED(jesus_ped, util.joaat("WEAPON_RAILGUN"), 9999, true, true)
+            PED.SET_PED_HEARING_RANGE(jesus_ped, 9999.0)
+            PED.SET_PED_CONFIG_FLAG(jesus_ped, 281, true)
+            PED.SET_PED_COMBAT_ATTRIBUTES(jesus_ped, 5, true)
+            PED.SET_PED_COMBAT_ATTRIBUTES(jesus_ped, 46, true)
+            PED.SET_PED_ACCURACY(jesus_ped, 100.0)
+            PED.SET_PED_COMBAT_ABILITY(jesus_ped, 2)
+            PED.SET_PED_CAN_RAGDOLL(jesus_ped, false)
+            TASK.TASK_COMBAT_PED(jesus_ped, ped, 0, 16)
+            
+            while toggled do
+                if PED.IS_PED_DEAD_OR_DYING(ped) then
+                    repeat
+                        util.yield()
+                    until not PED.IS_PED_DEAD_OR_DYING(ped)
+                    local new_pos = players.get_position(pid)
+                    new_pos.y += 2
+                    new_pos.z += 1 -- jesus kept sliding for some reason, doing this to prevent that.
+                    util.yield(2500)
+                    ENTITY.SET_ENTITY_COORDS_NO_OFFSET(jesus_ped, new_pos, false, false, false)
+                    WEAPON.REFILL_AMMO_INSTANTLY(jesus_ped)
+                    TASK.TASK_COMBAT_PED(jesus_ped, ped, 0, 16)
+                end
+                util.yield()
+            end
+        end
+        if jesus_ped ~= nil then
+            entities.delete_by_handle(jesus_ped)
+        end
+    end)
 
     menu.action(playertroll, "Zur Online-Einführung schicken", {}, "Schickt den Spieler zum GTA Online Intro.", function()
         if StandUser(pid) then util.toast(stand_notif) util.stop_thread() end
