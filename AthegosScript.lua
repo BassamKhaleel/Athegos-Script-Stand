@@ -11,7 +11,7 @@ util.require_natives("natives-1672190175-uno")
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.21)                                           --Aktuelle Script Version
+sversion = tonumber(0.22)                                           --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -29,6 +29,14 @@ local stand_notif = "My brother in christ, what are you doing?! This will not wo
 -- functions für Entity Controll
 ---------------------
 ---------------------
+
+function loadModel(model) 
+    STREAMING.REQUEST_MODEL(model)
+    while STREAMING.HAS_MODEL_LOADED(model) == false do 
+        STREAMING.REQUEST_MODEL(model)
+        util.yield(0)
+    end
+end
 
 local function BlockSyncs(pid, callback)
     for _, i in ipairs(players.list(false, true, true)) do
@@ -1406,8 +1414,8 @@ menu.toggle_loop(modderdetections, "Thunder Join", {}, "Erkennt ob jemand Thunde
         local new_sh = players.get_script_host()
         if old_sh ~= new_sh then
             if GetSpawnState(pid) == 0 and players.get_script_host() == pid then
-                util.toast(sprefix .. " " .. players.get_name(pid) .. " triggered a detection (Thunder Join) and is now classified as a Modder")
-                util.log(sprefix .. " " .. players.get_name(pid) .. " triggered a detection (Thunder Join) and is now classified as a Modder")
+                util.toast(sprefix .. " " .. players.get_name(pid) .. " hat die Erkennungen (Thunder Join) ausgelöst und ist nun als Modder eingestuft")
+                util.log(sprefix .. " " .. players.get_name(pid) .. " hat die Erkennungen (Thunder Join) ausgelöst und ist nun als Modder eingestuft")
                 break
             end
         end
@@ -1450,6 +1458,22 @@ menu.toggle_loop(modderdetections, "Gespawntes Fahrzeug", {}, "Erkennt ob jemand
     end 
 end)
 
+menu.toggle_loop(modderdetections, "Zu Viel Geld", {}, "Markiert Spieler die mehr als 600 Millionen haben.", function()
+    for _, pid in ipairs(players.list(false, true, true)) do
+        if players.get_money(pid) > 600000000 then 
+            util.draw_debug_text(sprefix .. " " .. players.get_name(pid) .. " hat gemoddetes Geld")
+        end
+    end
+end)
+
+menu.toggle_loop(modderdetections, "Hohes Level", {}, "Erkennt Spieler die über Level 1000 sind.", function()
+    for _, pid in ipairs(players.list(false, true, true)) do
+        if players.get_rank(pid) > 1000 then 
+            util.draw_debug_text(sprefix .. " " .. players.get_name(pid) .. " hat ein Hohes Level")
+        end
+    end
+end)
+
 menu.toggle_loop(normaldetections, "Teleportation", {}, "", function()
     for _, pid in players.list(false, true, true) do
         local old_pos = players.get_position(pid)
@@ -1464,6 +1488,14 @@ menu.toggle_loop(normaldetections, "Teleportation", {}, "", function()
                     util.log(sprefix .. " " .. players.get_name(pid) .. " hat sich " .. SYSTEM.ROUND(distance_between_tp) .. " Meter Teleportiert")
                 end
             end
+        end
+    end
+end)
+
+menu.toggle_loop(normaldetections, "SprachChat", {}, "Benachrichtigt dich wenn jemand den Sprach Chat benutzt.", function()
+    for _, pid in ipairs(players.list(true, true, true)) do
+        if NETWORK.NETWORK_IS_PLAYER_TALKING(pid) then 
+            util.toast(sprefix .. " " .. players.get_name(pid).. " benutzt SprachChat")
         end
     end
 end)
@@ -2220,6 +2252,13 @@ local function player(pid)
     local friendlyvehicle = menu.list(friendly, "Fahrzeug", {}, "")
         menu.divider(friendlyvehicle, "Fahrzeug")
 
+     menu.action(friendlyvehicle, "Fahrzeug Reparieren", {}, "Repariere das Fahrzeug des Spielers, wenn der Spieler nicht im Fahrzeug ist, dann repariert es sein letztes Fahrzeug.", function()    
+        local player = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local playerVehicle = PED.GET_VEHICLE_PED_IS_IN(player, true)
+        NETWORK.NETWORK_REQUEST_CONTROL_OF_ENTITY(playerVehicle)
+        VEHICLE.SET_VEHICLE_FIXED(playerVehicle)
+    end)
+
     menu.action(friendlyvehicle, "Fahrzeug Godmode", {}, "Gibt dem Fahrzeug Godmode", function(click_type)
         local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
         if car ~= 0 then
@@ -2244,11 +2283,18 @@ local function player(pid)
     end)
 
     player_toggle_loop(friendlyvehicle, pid, "Hupen Boost", {}, "Selbsterklärend.", function()
-        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
-        local veh = PED.GET_VEHICLE_PED_IS_USING(ped)
-        if PLAYER.IS_PLAYER_PRESSING_HORN(pid) then
-            ENTITY.APPLY_FORCE_TO_ENTITY(veh, 1, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0, 1, 1, 1, 0, 1)
-        end
+        local player = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local vehicle = PED.GET_VEHICLE_PED_IS_IN(player, false)
+        NETWORK.NETWORK_REQUEST_CONTROL_OF_ENTITY(vehicle)
+        local force = ENTITY.GET_ENTITY_FORWARD_VECTOR(vehicle)
+        force.x = force.x * 20
+        force.y = force.y * 20
+        force.z = force.z * 20
+        while PLAYER.IS_PLAYER_PRESSING_HORN(pid) == true do 
+            NETWORK.NETWORK_REQUEST_CONTROL_OF_ENTITY(vehicle)
+            ENTITY.APPLY_FORCE_TO_ENTITY(vehicle, 1, force.x, force.y, force.z, 0.0, 0.0, 0.0, 1, false, true, true, true, true)
+            util.yield(100)
+        end 
     end)
 
     local jump = menu.list(friendlyvehicle, "Fahrzeug Sprung", {}, "Gib ihm die Möglichkeit mit Fahrzeugen zu springen.")
@@ -2435,6 +2481,21 @@ local function player(pid)
         entities.delete_by_handle(obj) 
     end)
 
+    menu.action(playertroll, "Töte Passive Mode Spieler", {}, "", function()
+        local coords = players.get_position(pid)
+        local playerPed = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        coords.z = coords.z + 5
+        local playerCar = PED.GET_VEHICLE_PED_IS_IN(playerPed, false)
+        if playerCar > 0 then
+            entities.delete_by_handle(playerCar)
+        end
+        local carHash = util.joaat("dukes2")
+        loadModel(carHash)
+        local car = entities.create_vehicle(carHash, coords, 0)
+        ENTITY.SET_ENTITY_VISIBLE(car, false, 0)
+        ENTITY.APPLY_FORCE_TO_ENTITY(car, 1, 0.0, 0.0, -65, 0.0, 0.0, 0.0, 1, false, true, true, true, true)
+    end)
+
     local gravity = menu.list(playertroll, "Spieler schweben lassen", {}, "Funktioniert bei allen Menüs, kann aber erkannt werden. Funktioniert nicht bei Spielern mit Godmode.")
     local force = 1.00
     menu.slider_float(gravity, "Schwebe-Kraft", {}, "", 0, 100, 100, 10, function(value)
@@ -2608,6 +2669,18 @@ local function player(pid)
         util.yield()
     end, function()
         ENTITY.FREEZE_ENTITY_POSITION(players.user_ped(), false)
+    end)
+
+    menu.toggle_loop(playertrollfahrzeug, "Zufällige Motor Ausfälle", {}, "Schaltet das Fahrzeug zufällig aus", function()
+        local player = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local vehicle = PED.GET_VEHICLE_PED_IS_IN(player, false)
+        local random = math.random(1, 10)
+        if random >= 8 then 
+            VEHICLE.SET_VEHICLE_ENGINE_ON(vehicle, false, true, false)
+            VEHICLE.BRING_VEHICLE_TO_HALT(vehicle, 9, 1, false)
+            util.yield(50)
+        end
+        util.yield(2500)
     end)
 
     menu.toggle(playertrollfahrzeug, 'Dauerhafter Burnout', {}, 'Sein Auto macht dauerhaft Burnouts', function(toggle)
