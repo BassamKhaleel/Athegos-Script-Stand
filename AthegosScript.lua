@@ -164,6 +164,14 @@ local function BitTest(bits, place)
     return (bits & (1 << place)) ~= 0
 end
 
+local function IsPlayerInRcBandito(player)
+    return BitTest(memory.read_int(memory.script_global(1853910 + (player * 834 + 1) + 267 + 348)), 29)  -- Global_1853910[PLAYER::PLAYER_ID() /*834*/].f_267.f_348, 29
+end
+
+local function IsPlayerInRcTank(player)
+    return BitTest(memory.read_int(memory.script_global(1853910 + (player * 834 + 1) + 267 + 428 + 2)), 16) -- Global_1853910[PLAYER::PLAYER_ID() /*862*/].f_267.f_428.f_2
+end
+
 local function IsPlayerUsingOrbitalCannon(player)
     return BitTest(memory.read_int(memory.script_global((2657589 + (player * 466 + 1) + 427))), 0) -- Global_2657589[PLAYER::PLAYER_ID() /*466*/].f_427), 0
 end
