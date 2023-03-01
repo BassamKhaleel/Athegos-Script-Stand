@@ -2251,9 +2251,9 @@ menu.toggle_loop(wasserzeichen, "Wasserzeichen aktivieren", {"wasserzeichen"}, "
     local tx_size = directx.get_text_size(wm_text, 0.5)
 
 	directx.draw_rect(
-        x + settings.add_x * 0.5, 
+        x - 0.25 + settings.add_x * 0.6, 
         y, 
-        -(tx_size + 0.0105 + settings.add_x),  -- add watermark size
+        +(tx_size + 0.0105 + settings.add_x),  -- add watermark size
         0.025 + settings.add_y, 
         settings.bg_color
     )
@@ -2263,17 +2263,17 @@ menu.toggle_loop(wasserzeichen, "Wasserzeichen aktivieren", {"wasserzeichen"}, "
         0.0055, 
         0.5, 
         0.5, 
-        x - tx_size - 0.0055, 
+        x - 0.24, 
         y + 0.013, 
         0, 
         {["r"] = 1.0,["g"] = 1.0,["b"] = 1.0,["a"] = 1.0}
     )
 
     directx.draw_text(
-        x, 
+        x - 0.233,
         y + 0.004, 
         wm_text, 
-        ALIGN_TOP_RIGHT, 
+        ALIGN_TOP_LEFT, 
         0.5, 
         settings.tx_color, 
         false
