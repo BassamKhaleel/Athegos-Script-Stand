@@ -11,7 +11,7 @@ util.require_natives("natives-1672190175-uno")
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.22)                                           --Aktuelle Script Version
+sversion = tonumber(0.23)                                           --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -2126,6 +2126,158 @@ util.create_tick_handler(function()
         directx.draw_rect(0.0, 0.06, size_x, size_y, bg_color)
         directx.draw_text(0.0, 0.06, disp_stdout, 0, font_size, text_color, true)
     end
+end)
+
+local wasserzeichen = menu.list(sonstiges, "Wasserzeichen", {}, "")
+    menu.divider(wasserzeichen, "Athego's Script - Wasserzeichen")
+
+local x, y = 0.992, 0.008
+
+
+local settings = {
+	show_name = true,
+	show_date = true,
+	show_players = true,
+    show_modder = true,
+    show_firstl = 2,
+
+    add_x = 0.0055,
+    add_y = 0.0,
+    
+    bg_color = {
+        ["r"] = 0,
+        ["g"] = 0,
+        ["b"] = 0,
+        ["a"] = 0.8
+    },
+    tx_color = {
+        ["r"] = 1.0,
+        ["g"] = 1.0,
+        ["b"] = 1.0,
+        ["a"] = 1.0
+    }
+}
+local utils = {
+    edition = menu.get_edition(),
+    editions = {
+        'Free',
+        'Basic',
+        'Regular',
+        'Ultimate'
+    }
+}
+
+local moddercount = 0
+        for i, pid in pairs(players.list(true, true, true)) do
+            if players.is_marked_as_modder(pid) then
+                moddercount = moddercount + 1
+            end
+        end
+
+local icon
+if not filesystem.exists(filesystem.scripts_dir() .. '/lib/Athegos-Wasserzeichen/icon.png') then
+    util.toast(sprefix ..' Wasserzeichen-Symbol nicht gefunden, wird heruntergeladen...')
+    local path_root = filesystem.scripts_dir() .."lib/Athegos-Wasserzeichen/"
+    async_http.init('raw.githubusercontent.com', '/BassamKhaleel/Wasserzeichen_icon/main/icon.png', function(req)
+		if not req then
+			util.toast(sprefix .." Der Download von lib/watermak/stand_icon.png ist fehlgeschlagen, bitte laden Sie es manuell herunter.\nDer Link wird in Ihre Zwischenablage kopiert.")
+            util.copy_to_clipboard("https://github.com/BassamKhaleel/Wasserzeichen_icon/main/icon.png", true)
+            return 
+        end
+
+        filesystem.mkdir(path_root)
+		local f = io.open(path_root..'icon.png', "wb")
+		f:write(req)
+		f:close()
+		util.toast(sprefix .. " Die Datei icon.png wurde erfolgreich aus dem Repository heruntergeladen.")
+        icon = directx.create_texture(filesystem.scripts_dir() .. '/lib/Athegos-Wasserzeichen/icon.png')
+	end)
+	async_http.dispatch()
+else
+    icon = directx.create_texture(filesystem.scripts_dir() .. '/lib/Athegos-Wasserzeichen/icon.png')
+end
+
+menu.divider(wasserzeichen, "Einstellungen")
+
+local wassermark_pos = menu.list(wasserzeichen, "Position", {}, "", function() end)
+
+menu.slider(wassermark_pos, "X Position", {"wasserzeichen-x"}, "Verschieben des Wasserzeichens in der x-Position", -100000, 100000, x * 10000, 1, function(x_)
+    x = x_ / 10000
+end)
+menu.slider(wassermark_pos, "Y Position", {"wasserzeichen-y"}, "Verschieben des Wasserzeichens in der y-Position", -100000, 100000, y * 10000, 1, function(y_)
+    y = y_ / 10000
+end)
+menu.slider(wassermark_pos, "Extra X", {"wasserzeichen-extrax"}, "x Betrag zum Hintergrund hinzufügen", -100000, 100000, settings.add_x * 10000, 1, function(x_)
+    settings.add_x = x_ / 10000
+end)
+menu.slider(wassermark_pos, "Extra Y", {"wasserzeichen-extray"}, "y Betrag zum Hintergrund hinzufügen", -100000, 100000, settings.add_y * 10000, 1, function(y_)
+    settings.add_y = y_ / 10000
+end)
+
+local wassermark_farbe = menu.list(wasserzeichen, "Farben", {}, "", function() end)
+
+local rgb_background = menu.colour(wassermark_farbe, 'Hintergrund Farbe', {}, 'Wähle die Hintergrund Farbe aus', settings.bg_color, true, function(col)
+    settings.bg_color = col
+end)
+menu.rainbow(rgb_background)
+local rgb_text = menu.colour(wassermark_farbe, 'Text Farbe', {}, 'Wähle die Text Farbe aus', settings.tx_color, true, function(col)
+    settings.tx_color = col
+end)
+menu.rainbow(rgb_text)
+
+menu.divider(wasserzeichen, "Zusätzliche Einstellungen")
+menu.list_select(wasserzeichen, 'Erstes Label', {}, 'Ändern Sie das erste Label im Wasserzeichen', {'Deaktivieren', 'Stand', 'Version'}, settings.show_firstl, function (val)
+    settings.show_firstl = val
+end)
+menu.toggle(wasserzeichen, 'Name', {}, 'Zeigt deinen Namen im Wasserzeichen', function(val)
+	settings.show_name = val
+end, settings.show_name)
+menu.toggle(wasserzeichen, 'Spieleranzahl', {}, 'Zeigt die Spieleranzahl im Wasserzeichen', function(val)
+	settings.show_players = val
+end, settings.show_players)
+menu.toggle(wasserzeichen, 'Modder', {}, 'Zeigt die anzahl an Moddern im Wasserzeichen', function(val)
+	settings.show_modder = val
+end, settings.show_modder)
+menu.toggle(wasserzeichen, 'Uhrzeit', {}, 'Zeigt die aktuelle Uhrzeit im Wasserzeichen', function(val)
+	settings.show_date = val
+end, settings.show_date)
+
+menu.divider(wasserzeichen, "")
+
+menu.toggle_loop(wasserzeichen, "Wasserzeichen aktivieren", {"wasserzeichen"}, "Aktiviert/Deaktiviert das Wasserzeichen", function()
+    if menu.is_in_screenshot_mode() then return end
+	local wm_text = (settings.show_firstl == 2 and 'Stand | ' or settings.show_firstl == 3 and utils.editions[utils.edition+1]..' | ' or '') .. (settings.show_name and players.get_name(players.user())..' | ' or '') .. (settings.show_players and NETWORK.NETWORK_IS_SESSION_STARTED() and 'Spieler: '..#players.list(true, true, true)..' | ' or '') .. (settings.show_modder and NETWORK.NETWORK_IS_SESSION_STARTED() and 'Modder: '..moddercount..' | ' or '') .. (settings.show_date and os.date('%H:%M:%S') or '')
+
+    local tx_size = directx.get_text_size(wm_text, 0.5)
+
+	directx.draw_rect(
+        x + settings.add_x * 0.5, 
+        y, 
+        -(tx_size + 0.0105 + settings.add_x),  -- add watermark size
+        0.025 + settings.add_y, 
+        settings.bg_color
+    )
+    
+	directx.draw_texture(icon, 
+        0.0055, 
+        0.0055, 
+        0.5, 
+        0.5, 
+        x - tx_size - 0.0055, 
+        y + 0.013, 
+        0, 
+        {["r"] = 1.0,["g"] = 1.0,["b"] = 1.0,["a"] = 1.0}
+    )
+
+    directx.draw_text(
+        x, 
+        y + 0.004, 
+        wm_text, 
+        ALIGN_TOP_RIGHT, 
+        0.5, 
+        settings.tx_color, 
+        false
+    )
 end)
 
 ---------------------
