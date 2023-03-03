@@ -11,7 +11,7 @@ util.require_natives("natives-1672190175-uno")
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.24)                                           --Aktuelle Script Version
+sversion = tonumber(0.25)                                           --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -2330,20 +2330,6 @@ local function player(pid)
         end
     end)
 
-    local tp 
-    tp = player_toggle_loop(friendly, pid, "Teleport-Fähigkeit geben", {}, "Der Chat-Befehl lautet !waypoint. Der Spieler muss sich in einem Fahrzeug befinden.", function()
-        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
-        local veh = PED.GET_VEHICLE_PED_IS_USING(ped)
-
-        chat.on_message(function(packet_sender, message_sender, text, team_chat)
-            if string.contains(text, "!waypoint") and PED.IS_PED_IN_VEHICLE(ped, veh, false) then  
-                if players.get_name(message_sender) == players.get_name(pid) then
-                    menu.trigger_commands("wptp" .. players.get_name(pid))
-                end
-            end
-        end)
-    end)
-
     ---------------------
     ---------------------
     -- Spieler Liste/Freundlich/Fahrzeug
@@ -2353,66 +2339,51 @@ local function player(pid)
     local friendlyvehicle = menu.list(friendly, "Fahrzeug", {}, "")
         menu.divider(friendlyvehicle, "Fahrzeug")
 
-     menu.action(friendlyvehicle, "Fahrzeug Reparieren", {}, "Repariere das Fahrzeug des Spielers, wenn der Spieler nicht im Fahrzeug ist, dann repariert es sein letztes Fahrzeug.", function()    
-        local player = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
-        local playerVehicle = PED.GET_VEHICLE_PED_IS_IN(player, true)
-        NETWORK.NETWORK_REQUEST_CONTROL_OF_ENTITY(playerVehicle)
-        VEHICLE.SET_VEHICLE_FIXED(playerVehicle)
-    end)
+    --menu.action(friendlyvehicle, "Fahrzeug Reparieren", {}, "Repariere das Fahrzeug des Spielers, wenn der Spieler nicht im Fahrzeug ist, dann repariert es sein letztes Fahrzeug.", function()    
+    --    local player = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+    --    local playerVehicle = PED.GET_VEHICLE_PED_IS_IN(player, true)
+    --    NETWORK.NETWORK_REQUEST_CONTROL_OF_ENTITY(playerVehicle)
+    --    VEHICLE.SET_VEHICLE_FIXED(playerVehicle)
+    --end)
 
-    menu.action(friendlyvehicle, "Fahrzeug Godmode", {}, "Gibt dem Fahrzeug Godmode", function(click_type)
-        local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
-        if car ~= 0 then
-            request_control_of_entity(car)
-            ENTITY.SET_ENTITY_INVINCIBLE(car, true)
-            VEHICLE.SET_VEHICLE_CAN_BE_VISIBLY_DAMAGED(car, false)
-        end
-    end)
+    --menu.action(friendlyvehicle, "Fahrzeug Godmode", {}, "Gibt dem Fahrzeug Godmode", function(click_type)
+    --    local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
+    --    if car ~= 0 then
+    --        request_control_of_entity(car)
+    --        ENTITY.SET_ENTITY_INVINCIBLE(car, true)
+    --        VEHICLE.SET_VEHICLE_CAN_BE_VISIBLY_DAMAGED(car, false)
+    --    end
+    --end)
 
     menu.action(friendlyvehicle, "Entferne Haftbomben vom Fahrzeug", {}, "", function(click_type)
         local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
         NETWORK.REMOVE_ALL_STICKY_BOMBS_FROM_ENTITY(car)
     end)
 
-    menu.click_slider(friendlyvehicle, "Höchstgeschwindigkeit", {}, "", -10000, 10000, 200, 100, function(s)
-        local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
-        if car ~= 0 then
-            request_control_of_entity(car)
-            VEHICLE.MODIFY_VEHICLE_TOP_SPEED(car, s)
-            ENTITY.SET_ENTITY_MAX_SPEED(car, s)
-        end
-    end)
+    --menu.click_slider(friendlyvehicle, "Höchstgeschwindigkeit", {}, "", -10000, 10000, 200, 100, function(s)
+    --    local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
+    --    if car ~= 0 then
+    --        request_control_of_entity(car)
+    --        VEHICLE.MODIFY_VEHICLE_TOP_SPEED(car, s)
+    --        ENTITY.SET_ENTITY_MAX_SPEED(car, s)
+    --    end
+    --end)
 
-    player_toggle_loop(friendlyvehicle, pid, "Hupen Boost", {}, "Selbsterklärend.", function()
-        local player = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
-        local vehicle = PED.GET_VEHICLE_PED_IS_IN(player, false)
-        NETWORK.NETWORK_REQUEST_CONTROL_OF_ENTITY(vehicle)
-        local force = ENTITY.GET_ENTITY_FORWARD_VECTOR(vehicle)
-        force.x = force.x * 20
-        force.y = force.y * 20
-        force.z = force.z * 20
-        while PLAYER.IS_PLAYER_PRESSING_HORN(pid) == true do 
-            NETWORK.NETWORK_REQUEST_CONTROL_OF_ENTITY(vehicle)
-            ENTITY.APPLY_FORCE_TO_ENTITY(vehicle, 1, force.x, force.y, force.z, 0.0, 0.0, 0.0, 1, false, true, true, true, true)
-            util.yield(100)
-        end 
-    end)
-
-    local jump = menu.list(friendlyvehicle, "Fahrzeug Sprung", {}, "Gib ihm die Möglichkeit mit Fahrzeugen zu springen.")
-    local force = 25.00
-    menu.slider_float(jump, "Kraft", {}, "", 0, 10000, 2500, 100, function(value)
-        force = value / 100
-    end)
-    menu.toggle_loop(jump, "Aktivieren", {}, "Hupen zum Springen", function()
-        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
-        local veh = PED.GET_VEHICLE_PED_IS_USING(ped)
-        if veh ~= 0 and ENTITY.DOES_ENTITY_EXIST(veh) and PLAYER.IS_PLAYER_PRESSING_HORN(pid) then
-            ENTITY.APPLY_FORCE_TO_ENTITY(veh, 1, 0.0, force/1.5, force, 0.0, 0.0, 0.0, 0, 1, 1, 1, 0, 1)
-            repeat
-                util.yield()
-            until not PLAYER.IS_PLAYER_PRESSING_HORN(pid)
-        end
-    end)
+    --local jump = menu.list(friendlyvehicle, "Fahrzeug Sprung", {}, "Gib ihm die Möglichkeit mit Fahrzeugen zu springen.")
+    --local force = 25.00
+    --menu.slider_float(jump, "Kraft", {}, "", 0, 10000, 2500, 100, function(value)
+    --    force = value / 100
+    --end)
+    --menu.toggle_loop(jump, "Aktivieren", {}, "Hupen zum Springen", function()
+    --    local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+    --    local veh = PED.GET_VEHICLE_PED_IS_USING(ped)
+    --    if veh ~= 0 and ENTITY.DOES_ENTITY_EXIST(veh) and PLAYER.IS_PLAYER_PRESSING_HORN(pid) then
+    --        ENTITY.APPLY_FORCE_TO_ENTITY(veh, 1, 0.0, force/1.5, force, 0.0, 0.0, 0.0, 0, 1, 1, 1, 0, 1)
+    --        repeat
+    --            util.yield()
+    --        until not PLAYER.IS_PLAYER_PRESSING_HORN(pid)
+    --    end
+    --end)
 
     ---------------------
     ---------------------
@@ -2894,7 +2865,7 @@ local function player(pid)
     local playertrollnpc = menu.list(playertroll, "NPC Trolling", {}, "")
         menu.divider(playertrollnpc, "NPC Trolling")
 
-    menu.toggle_loop(playertrollnpc, "Aus Fahrzeug Sperren", {}, "", function()
+    menu.toggle_loop(playertrollnpc, "Lock Out Of Vehicles", {"vehiclelock"}, "", function()
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         local vehicle = PED.GET_VEHICLE_PED_IS_TRYING_TO_ENTER(ped)
         if not VEHICLE.GET_VEHICLE_DOORS_LOCKED_FOR_PLAYER(vehicle, pid) then
