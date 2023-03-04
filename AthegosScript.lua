@@ -11,7 +11,7 @@ util.require_natives("natives-1672190175-uno")
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.26)                                           --Aktuelle Script Version
+sversion = tonumber(0.27)                                           --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -1268,6 +1268,9 @@ local detections = menu.list(online, "Erkennungen", {}, "")
     local normaldetections = menu.list(detections, "Standart Erkennungen", {}, "")
     menu.divider(normaldetections, "Athego's Script - Standart Erkennungen")
 
+    local uselessdetections = menu.list(detections, "Experimentelle Erkennungen", {}, "")
+    menu.divider(uselessdetections, "Athego's Script - Experimentelle Erkennungen")
+
     menu.toggle_loop(modderdetections, "Godmode", {}, "Erkennt ob jemand Godmode benutzt", function()
         for _, pid in players.list(false, true, true) do
             local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
@@ -1500,6 +1503,30 @@ menu.toggle_loop(normaldetections, "Glitched Godmode", {}, "Erkennt ob jemand ei
         end
     end 
 end)
+
+menu.toggle_loop(uselessdetections, "Deutsch", {}, "Erkennt Deutsche Spieler und zeigt dir sie an!", function()
+    for _, pid in ipairs(players.list(true, true, true)) do
+        if players.get_language(pid) == 2 then
+            util.draw_debug_text(sprefix .. " " .. players.get_name(pid).. " kann Deutsch")
+        end
+    end
+end)
+
+local regionDetect = {
+    [0]  = {kick = false, lang = "English"},
+    [1]  = {kick = false, lang = "Französisch"},
+    [2]  = {kick = false, lang = "Deutsch"},
+    [3]  = {kick = false, lang = "Italienisch"},
+    [4]  = {kick = false, lang = "Spanisch"},
+    [5]  = {kick = false, lang = "Brasilianisch"},
+    [6]  = {kick = false, lang = "Polnisch"},
+    [7]  = {kick = false, lang = "Russisch"},
+    [8]  = {kick = false, lang = "Koreanisch"},
+    [9]  = {kick = false, lang = "Chinesisch Traditionell"},
+    [10] = {kick = false, lang = "Japanisch"},
+    [11] = {kick = false, lang = "Mexikanisch"},
+    [12] = {kick = false, lang = "Chinesisch Vereinfacht"},
+}
 
 ---------------------
 ---------------------
