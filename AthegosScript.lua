@@ -11,7 +11,7 @@ util.require_natives("natives-1672190175-uno")
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.25)                                           --Aktuelle Script Version
+sversion = tonumber(0.26)                                           --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -22,7 +22,7 @@ local pickupInterface = memory.read_long(replayInterface + 0x0020)
 local playerid = players.user()
 local requestModel = STREAMING.REQUEST_MODEL
 local InSession = function() return util.is_session_started() and not util.is_session_transition_active() end
-local stand_notif = "My brother in christ, what are you doing?! This will not work on a fellow stand user."
+local stand_notif = "Mein Bruder, was machst du da?! Das wird bei einem anderen Stand Nutzer nicht funktionieren."
 
 ---------------------
 ---------------------
@@ -219,7 +219,7 @@ local function npc_jack(target, nearest)
     end)
 end
 
-function Vmod(vmod, plate)
+local function Vmod(vmod, plate)
     VEHICLE.SET_VEHICLE_FIXED(vmod)
     for M=0, 49 do
         local modn = VEHICLE.GET_NUM_VEHICLE_MODS(vmod, M)
@@ -235,6 +235,21 @@ function Vmod(vmod, plate)
         VEHICLE.SET_VEHICLE_MAX_SPEED(vmod, 100)
         VEHICLE.MODIFY_VEHICLE_TOP_SPEED(vmod, 40)
         VEHICLE.SET_VEHICLE_BURNOUT(vmod, false)
+    end
+end
+
+local function Fixveh(pid)
+    local pedm = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+    local spec = menu.get_value(menu.ref_by_rel_path(menu.player_root(pid), "Spectate>Nuts Method"))
+    local vmod = PED.GET_VEHICLE_PED_IS_IN(pedm, false)
+    GetControl(vmod, spec, pid)
+    VEHICLE.SET_VEHICLE_FIXED(vmod)
+    VEHICLE.SET_VEHICLE_ENGINE_HEALTH(vmod, 1000)
+    ENTITY.SET_ENTITY_INVINCIBLE(vmod, true)
+    VEHICLE.SET_VEHICLE_IS_CONSIDERED_BY_PLAYER(vmod, true)
+    ENTITY.SET_ENTITY_HEALTH(vmod, 200)
+    if set.alert then
+    util.toast('Vehicle Repaired')
     end
 end
 
@@ -1184,6 +1199,19 @@ end)
 ---------------------
 ---------------------
 
+local lobby <const> = menu.list(online, "Lobby", {}, "")
+    menu.divider(lobby, "Athego's Script - Lobby")
+
+menu.toggle_loop(lobby, "Mk2-Nutzer verärgern", {}, "", function()
+    for _, pid in players.list(false, false, true) do
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local veh = PED.GET_VEHICLE_PED_IS_IN(ped, false)
+        if HUD.GET_BLIP_SPRITE(HUD.GET_BLIP_FROM_ENTITY(ped)) == 639 then
+            VEHICLE.SET_VEHICLE_HOMING_LOCKEDONTO_STATE(veh, 1)
+        end
+    end
+end)
+
 become_host = menu.action(online, "Host Werden", {}, "Kickt Spieler bis du Host wirst.", function(type)
                 if InSession() then
                     if players.get_host() ~= players.user() then
@@ -1554,7 +1582,7 @@ menu.toggle_loop(anticage, "Anti Käfig aktivieren", {"anticage"}, "", function(
                     entities.delete_by_handle(obj_handle)
                 end
                 if data ~= 0 and ENTITY.IS_ENTITY_TOUCHING_ENTITY(data, obj_handle) then
-                    util.toast(sprefix .. "Käfig blockiert von " .. players.get_name(owner))
+                    util.toast(sprefix .. " Käfig blockiert von " .. players.get_name(owner))
                 end
             end
         end
@@ -2303,7 +2331,7 @@ local function player(pid)
     end)
 
     local firw = {speed = 1000}
-    menu.toggle_loop(friendly, 'Feuerwerkshow', {'feuerw'}, 'Zünde ein Feuerwerk am Standort des Spielers', function ()
+    menu.toggle_loop(friendly, 'Feuerwerkshow', {}, 'Zünde ein Feuerwerk am Standort des Spielers', function ()
         local targets = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         local tar1 = ENTITY.GET_ENTITY_COORDS(targets, true)
         local weap = util.joaat('weapon_firework')
@@ -2330,6 +2358,25 @@ local function player(pid)
         end
     end)
 
+    local firw = {speed = 1000}
+    menu.toggle_loop(friendly, 'Feuerwerkshow 2', {}, 'Zünde ein Feuerwerk am Standort des Spielers', function ()
+          local targets = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+          local tar1 = ENTITY.GET_ENTITY_COORDS(targets, true)
+          local weap = util.joaat('weapon_firework')
+          WEAPON.REQUEST_WEAPON_ASSET(weap)
+          for y = 0, 1 do
+            MISC.SHOOT_SINGLE_BULLET_BETWEEN_COORDS(tar1.x, tar1.y, tar1.z + 4.0, tar1.x - math.random(-100, 100), tar1.y - math.random(-100, 100), tar1.z + math.random(10, 15), 200, 0, weap, 0, false, false, firw.speed)
+            MISC.SHOOT_SINGLE_BULLET_BETWEEN_COORDS(tar1.x, tar1.y, tar1.z + 4.0, tar1.x + math.random(-100, 100), tar1.y + math.random(-100, 100), tar1.z + math.random(10, 15), 200, 0, weap, 0, false, false, firw.speed)
+            FIRE.ADD_EXPLOSION(tar1.x + math.random(-100, 100), tar1.y + math.random(-100, 100), tar1.z + math.random(50, 75), 38, 1, false, false, 0, false)
+            FIRE.ADD_EXPLOSION(tar1.x - math.random(-100, 100), tar1.y - math.random(-100, 100), tar1.z + math.random(50, 75), 38, 1, false, false, 0, false) 
+        end
+
+
+          if not players.exists(pid) then
+              util.stop_thread()
+          end
+      end)
+
     ---------------------
     ---------------------
     -- Spieler Liste/Freundlich/Fahrzeug
@@ -2338,13 +2385,6 @@ local function player(pid)
 
     local friendlyvehicle = menu.list(friendly, "Fahrzeug", {}, "")
         menu.divider(friendlyvehicle, "Fahrzeug")
-
-    --menu.action(friendlyvehicle, "Fahrzeug Reparieren", {}, "Repariere das Fahrzeug des Spielers, wenn der Spieler nicht im Fahrzeug ist, dann repariert es sein letztes Fahrzeug.", function()    
-    --    local player = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
-    --    local playerVehicle = PED.GET_VEHICLE_PED_IS_IN(player, true)
-    --    NETWORK.NETWORK_REQUEST_CONTROL_OF_ENTITY(playerVehicle)
-    --    VEHICLE.SET_VEHICLE_FIXED(playerVehicle)
-    --end)
 
     --menu.action(friendlyvehicle, "Fahrzeug Godmode", {}, "Gibt dem Fahrzeug Godmode", function(click_type)
     --    local car = PED.GET_VEHICLE_PED_IS_IN(PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid), true)
