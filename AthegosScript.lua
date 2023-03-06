@@ -11,7 +11,7 @@ util.require_natives("natives-1672190175-uno")
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.27)                                           --Aktuelle Script Version
+sversion = tonumber(0.28)                                           --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -23,6 +23,7 @@ local playerid = players.user()
 local requestModel = STREAMING.REQUEST_MODEL
 local InSession = function() return util.is_session_started() and not util.is_session_transition_active() end
 local stand_notif = "Mein Bruder, was machst du da?! Das wird bei einem anderen Stand Nutzer nicht funktionieren."
+local spawned_objects = {}
 
 ---------------------
 ---------------------
@@ -2077,6 +2078,87 @@ end
 ---------------------
 ---------------------
 
+local translater = menu.list(sonstiges, "Next Translate", {}, "")
+menu.divider(translater, "Athego's Script - Next Translate")
+
+local language_codes_by_enum = {
+    [0]= "en-us",
+    [1]= "fr-fr",
+    [2]= "de-de",
+    [3]= "it-it",
+    [4]= "es-es",
+    [5]= "pt-br",
+    [6]= "pl-pl",
+    [7]= "ru-ru",
+    [8]= "ko-kr",
+    [9]= "zh-tw",
+    [10] = "ja-jp",
+    [11] = "es-mx",
+    [12] = "zh-cn"
+}
+
+local my_lang = "de-de"
+
+function get_iso_version_of_lang(lang_code)
+    lang_code = string.lower(lang_code)
+    if lang_code ~= "zh-cn" and lang_code ~= "zh-tw" then
+        return string.split(lang_code, '-')[1]
+    else
+        return lang_code
+    end
+end
+
+function encode_for_web(text)
+	return string.gsub(text, "%s", "+")
+end
+
+local iso_my_lang = get_iso_version_of_lang(my_lang)
+
+local do_translate = false
+menu.toggle(translater, "Aktivieren [BETA]", {}, "Schaltet das Übersetzen ein/aus. DIES IST EINE BETA-FUNKTION!", function(on)
+    do_translate = on
+end, false)
+
+local only_translate_foreign = true
+menu.toggle(translater, "Nur fremdsprachige Chatnachrichten übersetzen", {}, "Übersetzt nur Nachrichten von Nutzern mit einer anderen Spielsprache und spart so API-Aufrufe. Du solltest dies aktiviert lassen, um zu verhindern, dass Google Ihre Anfragen vorübergehend blockiert.", function(on)
+    only_translate_foreign = on
+end, true)
+
+local players_on_cooldown = {}
+
+chat.on_message(function(sender, reserved, text, team_chat, networked, is_auto)
+    if do_translate and networked and players.user() ~= sender then
+        local encoded_text = encode_for_web(text)
+        local player_lang = language_codes_by_enum[players.get_language(sender)]
+        local player_name = players.get_name(sender)
+        if only_translate_foreign and player_lang == my_lang then
+            return
+        end
+        -- credit to the original chat translator for the api code
+        local translation
+        if players_on_cooldown[sender] == nil then
+            async_http.init("translate.googleapis.com", "/translate_a/single?client=gtx&sl=auto&tl=" .. iso_my_lang .."&dt=t&q=".. encoded_text, function(data)
+		    	translation, original, source_lang = data:match("^%[%[%[\"(.-)\",\"(.-)\",.-,.-,.-]],.-,\"(.-)\"")
+                if source_lang == nil then 
+                    util.toast(sprefix .. " Die Übersetzung einer Nachricht von " .. player_name .. " ist fehlgeschlagen")
+                    return
+                end
+                players_on_cooldown[sender] = true
+                if get_iso_version_of_lang(source_lang) ~= iso_my_lang then
+                    chat.send_message(string.gsub(player_name .. ': \"' .. translation .. '\"', "%+", " "), team_chat, true, false)
+                end
+                util.yield(1000)
+                players_on_cooldown[sender] = nil
+		    end, function()
+                util.toast(sprefix .. " Die Übersetzung einer Nachricht von " .. player_name .. " ist fehlgeschlagen")
+            end)
+		    async_http.dispatch()
+        else
+            util.toast(sprefix .. " ".. player_name .. "hat eine Nachricht geschickt, ist aber von den Übersetzungen ausgeschlossen wegen zu vielene Nachrichten. Zieh in Erwägung, diesen Spieler zu kicken, wenn er den Chat spammt, um eine mögliche vorübergehende Sperre von Google translate zu verhindern.")
+        end
+    end
+end)
+
 local ingame_konsole = menu.list(sonstiges, "Ingame Konsole", {}, "")
     menu.divider(ingame_konsole, "Athego's Script - Ingame Konsole")
 
@@ -3190,6 +3272,67 @@ local function player(pid)
     -- Spieler Liste/Trolling
     ---------------------
     ---------------------
+
+    local cage = menu.list(playertroll, "Käfige", {}, "")
+    menu.divider(cage, "Athego's Script - Käfige")
+
+    menu.action(cage, "Elektrischer Käfig", {}, "", function(cl)
+        local number_of_cages = 6
+        local elec_box = util.joaat("prop_elecbox_12")
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local pos = ENTITY.GET_ENTITY_COORDS(ped)
+        pos.z -= 0.5
+        request_model(elec_box)
+        local temp_v3 = v3.new(0, 0, 0)
+        for i = 1, number_of_cages do
+            local angle = (i / number_of_cages) * 360
+            temp_v3.z = angle
+            local obj_pos = temp_v3:toDir()
+            obj_pos:mul(2.5)
+            obj_pos:add(pos)
+            for offs_z = 1, 5 do
+                local electric_cage = entities.create_object(elec_box, obj_pos)
+                spawned_objects[#spawned_objects + 1] = electric_cage
+                ENTITY.SET_ENTITY_ROTATION(electric_cage, 90.0, 0.0, angle, 2, 0)
+                obj_pos.z += 0.75
+                ENTITY.FREEZE_ENTITY_POSITION(electric_cage, true)
+            end
+        end
+    end)
+
+    menu.action(cage, "Schiffcontainer", {}, "", function()
+        local container_hash = util.joaat("prop_container_ld_pu")
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local pos = ENTITY.GET_ENTITY_COORDS(ped)
+        request_model(container_hash)
+        pos.z -= 1
+        local container = entities.create_object(container_hash, pos, 0)
+        spawned_objects[#spawned_objects + 1] = container
+        ENTITY.FREEZE_ENTITY_POSITION(container, true)
+    end)
+
+    menu.action(cage, "Fahrzeugkäfig", {}, "", function()
+        local container_hash = util.joaat("boxville3")
+        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+        local pos = ENTITY.GET_ENTITY_COORDS(ped)
+        request_model(container_hash)
+        local container = entities.create_vehicle(container_hash, ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(ped, 0.0, 2.0, 0.0), ENTITY.GET_ENTITY_HEADING(ped))
+        spawned_objects[#spawned_objects + 1] = container
+        ENTITY.SET_ENTITY_VISIBLE(container, false)
+        ENTITY.FREEZE_ENTITY_POSITION(container, true)
+    end)
+
+    menu.action(cage, "Lösche gespawnte Käfige", {"clearcages"}, "", function()
+        local entitycount = 0
+        for i, object in ipairs(spawned_objects) do
+            ENTITY.SET_ENTITY_AS_MISSION_ENTITY(object, false, false)
+            NETWORK.NETWORK_REQUEST_CONTROL_OF_ENTITY(object)
+            entities.delete_by_handle(object)
+            spawned_objects[i] = nil
+            entitycount += 1
+        end
+        util.toast("[Athego's Script] " .. entitycount .. " gespawnte Käfige wurden gelöscht!")
+    end)
 
     local jesus_tgl = false
     local jesus_ped
