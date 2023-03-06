@@ -2768,6 +2768,17 @@ local function player(pid)
         FIRE.ADD_EXPLOSION(coords['x'], coords['y'], coords['z'], math.random(0, 82), 1.0, true, false, 0.0)
     end)
 
+    local nuke = false
+    menu.toggle(playertrollexplo, "Hiroshima", {}, "Bombardiert ihren Arsch als wäre es Hiroshima.", function(toggle)
+        nuke = toggle
+        while nuke do
+            local target_ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
+            local coords = ENTITY.GET_ENTITY_COORDS(target_ped)
+            FIRE.ADD_EXPLOSION(coords.x, coords.y, coords.z, 29, 1.0, true, false, 1.0, false)
+            util.yield()
+        end
+    end)
+
     ---------------------
     ---------------------
     -- Spieler Liste/Trolling/Fahrzeug
@@ -3308,17 +3319,6 @@ local function player(pid)
         pos.z -= 1
         local container = entities.create_object(container_hash, pos, 0)
         spawned_objects[#spawned_objects + 1] = container
-        ENTITY.FREEZE_ENTITY_POSITION(container, true)
-    end)
-
-    menu.action(cage, "Fahrzeugkäfig", {}, "", function()
-        local container_hash = util.joaat("boxville3")
-        local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
-        local pos = ENTITY.GET_ENTITY_COORDS(ped)
-        request_model(container_hash)
-        local container = entities.create_vehicle(container_hash, ENTITY.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(ped, 0.0, 2.0, 0.0), ENTITY.GET_ENTITY_HEADING(ped))
-        spawned_objects[#spawned_objects + 1] = container
-        ENTITY.SET_ENTITY_VISIBLE(container, false)
         ENTITY.FREEZE_ENTITY_POSITION(container, true)
     end)
 
