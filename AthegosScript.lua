@@ -11,7 +11,7 @@ util.require_natives("natives-1672190175-uno")
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.29)                                           --Aktuelle Script Version
+sversion = tonumber(0.30)                                           --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -1295,7 +1295,7 @@ local detections = menu.list(online, "Erkennungen", {}, "")
             for _, id in interior_stuff do
                 if players.is_godmode(pid) and not players.is_in_interior(pid) and not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped) and GetSpawnState(pid) == 99 and GetInteriorPlayerIsIn(pid) == id then
                     util.draw_debug_text(sprefix .. " " .. players.get_name(pid) .. " benutzt Godmode")
-                    util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt Godmode")
+                    --util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt Godmode")
                     break
                 end
             end
@@ -1312,7 +1312,7 @@ local detections = menu.list(online, "Erkennungen", {}, "")
                     if not ENTITY.GET_ENTITY_CAN_BE_DAMAGED(vehicle) and not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped) 
                     and GetSpawnState(pid) == 99 and GetInteriorPlayerIsIn(pid) == id and pid == driver then
                         util.draw_debug_text(sprefix .. " " .. players.get_name(driver) .. " benutzt Vehicle Godmode")
-                    util.toast(sprefix .. " " .. players.get_name(driver) .. " benutzt Vehicle Godmode")
+                        --util.toast(sprefix .. " " .. players.get_name(driver) .. " benutzt Vehicle Godmode")
                         break
                     end
                 end
@@ -1327,7 +1327,7 @@ menu.toggle_loop(modderdetections, "Gemoddete Waffe", {}, "Erkennt ob jemand ein
             local weapon_hash = util.joaat(hash)
             if WEAPON.HAS_PED_GOT_WEAPON(ped, weapon_hash, false) and (WEAPON.IS_PED_ARMED(ped, 7) or TASK.GET_IS_TASK_ACTIVE(ped, 8) or TASK.GET_IS_TASK_ACTIVE(ped, 9)) then
                 util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt eine Gemoddete Waffe " .. "(" .. hash .. ")")
-                util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt eine Gemoddete Waffe " .. "(" .. hash .. ")")
+                --util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt eine Gemoddete Waffe " .. "(" .. hash .. ")")
                 break
             end
         end
@@ -1343,7 +1343,7 @@ menu.toggle_loop(modderdetections, "Gemoddetes Fahrzeug", {}, "Erkennt ob jemand
         for i, name in ipairs(modded_vehicles) do
             if modelHash == util.joaat(name) then
                 util.toast(sprefix .. " " .. players.get_name(pid) .. " fährt ein gemoddetes Fahrzeug " .. "(" .. name .. ")")
-                util.log(sprefix .. " " .. players.get_name(pid) .. " fährt ein gemoddetes Fahrzeug " .. "(" .. name .. ")")
+                --util.log(sprefix .. " " .. players.get_name(pid) .. " fährt ein gemoddetes Fahrzeug " .. "(" .. name .. ")")
                 break
             end
         end
@@ -1370,7 +1370,7 @@ menu.toggle_loop(modderdetections, "Noclip", {}, "Erkennt ob jemand Noclipe benu
         and oldpos.x ~= currentpos.x and oldpos.y ~= currentpos.y and oldpos.z ~= currentpos.z 
         and vel.x == 0.0 and vel.y == 0.0 and vel.z == 0.0 then
             util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt Noclip")
-            util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt Noclip")
+            --util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt Noclip")
             break
         end
     end
@@ -1383,8 +1383,9 @@ menu.toggle_loop(modderdetections, "Super Drive", {}, "Erkennt ob jemand Super D
         local veh_speed = (ENTITY.GET_ENTITY_SPEED(vehicle)* 2.236936)
         local class = VEHICLE.GET_VEHICLE_CLASS(vehicle)
         if class ~= 15 and class ~= 16 and veh_speed >= 200 and VEHICLE.GET_PED_IN_VEHICLE_SEAT(vehicle, -1) and (players.get_vehicle_model(pid) ~= util.joaat("oppressor") or players.get_vehicle_model(pid) ~= util.joaat("oppressor2")) then
-            util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt Super Drive")
-            util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt Super Drive")
+            --util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt Super Drive")
+            util.draw_debug_text(sprefix .. " " .. players.get_name(pid) .. " benutzt Super Drive")
+            --util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt Super Drive")
             break
         end
     end
@@ -1396,7 +1397,7 @@ menu.toggle_loop(modderdetections, "Zuschauen", {}, "Erkennt ob dir jemand zuguc
         if not PED.IS_PED_DEAD_OR_DYING(ped) then
             if v3.distance(players.get_position(players.user()), players.get_cam_pos(pid)) < 20.0 and v3.distance(players.get_position(players.user()), players.get_position(pid)) > 50.0 then
                 util.toast(sprefix .. " " .. players.get_name(pid) .. " schaut dir zu")
-                util.log(sprefix .. " " .. players.get_name(pid) .. " schaut dir zu")
+                --util.log(sprefix .. " " .. players.get_name(pid) .. " schaut dir zu")
                 break
             end
         end
@@ -1412,7 +1413,7 @@ menu.toggle_loop(modderdetections, "Thunder Join", {}, "Erkennt ob jemand Thunde
         if old_sh ~= new_sh then
             if GetSpawnState(pid) == 0 and players.get_script_host() == pid then
                 util.toast(sprefix .. " " .. players.get_name(pid) .. " hat die Erkennungen (Thunder Join) ausgelöst und ist nun als Modder eingestuft")
-                util.log(sprefix .. " " .. players.get_name(pid) .. " hat die Erkennungen (Thunder Join) ausgelöst und ist nun als Modder eingestuft")
+                --util.log(sprefix .. " " .. players.get_name(pid) .. " hat die Erkennungen (Thunder Join) ausgelöst und ist nun als Modder eingestuft")
                 break
             end
         end
@@ -1424,7 +1425,7 @@ menu.toggle_loop(modderdetections, "Modded Orbital Kanone", {}, "Erkennt ob jema
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         if IsPlayerUsingOrbitalCannon(pid) and not TASK.GET_IS_TASK_ACTIVE(ped, 135) and GetSpawnState(pid) ~= 0 then
             util.toast(sprefix .. " " .. players.get_name(pid) .. " verwendet eine Gemoddete Orbital Kanone")
-            util.log(sprefix .. " " .. players.get_name(pid) .. " verwendet eine Gemoddete Orbital Kanone")
+            --util.log(sprefix .. " " .. players.get_name(pid) .. " verwendet eine Gemoddete Orbital Kanone")
             break
         end
     end
@@ -1482,7 +1483,7 @@ menu.toggle_loop(normaldetections, "Teleportation", {}, "", function()
                 util.yield(100)
                 if distance_between_tp > 300.0 then
                     util.toast(sprefix .. " " .. players.get_name(pid) .. " hat sich " .. SYSTEM.ROUND(distance_between_tp) .. " Meter Teleportiert")
-                    util.log(sprefix .. " " .. players.get_name(pid) .. " hat sich " .. SYSTEM.ROUND(distance_between_tp) .. " Meter Teleportiert")
+                    --util.log(sprefix .. " " .. players.get_name(pid) .. " hat sich " .. SYSTEM.ROUND(distance_between_tp) .. " Meter Teleportiert")
                 end
             end
         end
@@ -1502,7 +1503,7 @@ menu.toggle_loop(normaldetections, "Orbital Kanone", {}, "Erkennt ob jemand die 
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         if IsPlayerUsingOrbitalCannon(pid) and TASK.GET_IS_TASK_ACTIVE(ped, 135)then
             util.toast(sprefix .. " " .. players.get_name(pid) .. " ist bei der Orbital Kanone")
-            util.log(sprefix .. " " .. players.get_name(pid) .. " ist bei der Orbital Kanone")
+            --util.log(sprefix .. " " .. players.get_name(pid) .. " ist bei der Orbital Kanone")
         end
     end
 end)
@@ -1515,7 +1516,8 @@ menu.toggle_loop(normaldetections, "Glitched Godmode", {}, "Erkennt ob jemand ei
         for _, id in ipairs(interior_stuff) do
             if players.is_in_interior(pid) and players.is_godmode(pid) and not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped) and get_spawn_state(pid) == 99 and get_interior_player_is_in(pid) == id and height >= 0.0 then
                 util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt Glitched Godmode")
-                util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt Glitched Godmode")
+                util.draw_debug_text
+                --util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt Glitched Godmode")
                 break
             end
         end
@@ -1530,7 +1532,7 @@ menu.toggle_loop(uselessdetections, "Deutsch", {}, "Erkennt Deutsche Spieler und
     end
 end)
 
-local checkmodderdb = true
+local checkmodderdb = false
 menu.toggle(uselessdetections, "Datenbank Check", {"dbcheck"}, "Überprüft joinende Spieler ob sie in der Datenbank hinterlegt sind.", function(on)
     checkmodderdb = on
 end)
