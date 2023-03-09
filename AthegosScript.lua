@@ -11,7 +11,7 @@ util.require_natives("natives-1672190175-uno")
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.28)                                           --Aktuelle Script Version
+sversion = tonumber(0.29)                                           --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
@@ -237,6 +237,23 @@ local function Vmod(vmod, plate)
         VEHICLE.MODIFY_VEHICLE_TOP_SPEED(vmod, 40)
         VEHICLE.SET_VEHICLE_BURNOUT(vmod, false)
     end
+end
+
+local function SessionType()
+    if util.is_session_started() then
+        if NETWORK.NETWORK_SESSION_IS_PRIVATE() then
+            return "Invite"
+        elseif NETWORK.NETWORK_SESSION_IS_CLOSED_CREW() then
+            return "Closed Crew"
+        elseif NETWORK.NETWORK_SESSION_IS_CLOSED_FRIENDS() then
+            return "Cloes Friend"
+        elseif NETWORK.NETWORK_SESSION_IS_SOLO() then
+            return "Solo"
+        else
+        return "Public"
+        end
+    end
+return "Story Mode"
 end
 
 local function Fixveh(pid)
@@ -1511,6 +1528,11 @@ menu.toggle_loop(uselessdetections, "Deutsch", {}, "Erkennt Deutsche Spieler und
             util.draw_debug_text(sprefix .. " " .. players.get_name(pid).. " kann Deutsch")
         end
     end
+end)
+
+local checkmodderdb = false
+menu.toggle(uselessdetections, "Datenbank Check", {"dbcheck"}, "Überprüft joinende Spieler ob sie in der Datenbank hinterlegt sind.", function(on)
+    checkmodderdb = on
 end)
 
 local regionDetect = {
@@ -3634,12 +3656,122 @@ local function player(pid)
         end
     end)
 
+    menu.action(menu.player_root(pid), "Freund zur DB hinzufügen", {"addfriend"}, "Fügt einen Freund/Korrekten Spieler zur Datenbank auf der NLR-Website hinzu.", function()
+        local json = require("json")
+        local auth = "Basic TkxSX0x1YV9BUElfQUREOjIhbWRrYUYoMmgkMg=="
+        local playername = PLAYER.GET_PLAYER_NAME(pid)
+        local playerid = players.get_rockstar_id(pid)
+        menu.trigger_commands("historynote" .. playername .. " Korrekt")
+        local tabletest = {["name"] = playername, ["rid"] = tostring(playerid), ["note"] = "None", ["link"] = "None", ["status"] = "Freund"}
+        async_http.init("https://www.nolimitsrecovery.de", "/players/", function(body, header, status_code)
+        end)
+        async_http.set_post("application/json", json.encode(tabletest))
+        async_http.add_header("Authorization", auth)
+        async_http.dispatch()
+        util.toast(sprefix .. " Freund wurde erfolgreich auf die Datenbank übertragen.")
+    end)
 
+    menu.action(menu.player_root(pid), "TryHard zur DB hinzufügen", {"addtryhard"}, "Fügt einen TryHard zur Datenbank auf der NLR-Website hinzu.", function()
+        local json = require("json")
+        local auth = "Basic TkxSX0x1YV9BUElfQUREOjIhbWRrYUYoMmgkMg=="
+        local playername = PLAYER.GET_PLAYER_NAME(pid)
+        local playerid = players.get_rockstar_id(pid)
+        menu.trigger_commands("historynote" .. playername .. " TryHard")
+        local tabletest = {["name"] = playername, ["rid"] = tostring(playerid), ["note"] = "None", ["link"] = "None", ["status"] = "TryHard"}
+        async_http.init("https://www.nolimitsrecovery.de", "/players/", function(body, header, status_code)
+        end)
+        async_http.set_post("application/json", json.encode(tabletest))
+        async_http.add_header("Authorization", auth)
+        async_http.dispatch()
+        util.toast(sprefix .. " TryHard wurde erfolgreich auf die Datenbank übertragen.")
+    end)
 
+    menu.action(menu.player_root(pid), "Modder zur DB hinzufügen", {"addmodder"}, "Fügt einen Modder zur Datenbank auf der NLR-Website hinzu.", function()
+        local json = require("json")
+        local auth = "Basic TkxSX0x1YV9BUElfQUREOjIhbWRrYUYoMmgkMg=="
+        local playername = PLAYER.GET_PLAYER_NAME(pid)
+        local playerid = players.get_rockstar_id(pid)
+        menu.trigger_commands("historynote" .. playername .. " Modder")
+        menu.trigger_commands("historyblock" .. playername)
+        menu.trigger_commands("kick" .. playername)
+        local tabletest = {["name"] = playername, ["rid"] = tostring(playerid), ["note"] = "None", ["link"] = "None", ["status"] = "Modder"}
+        async_http.init("https://www.nolimitsrecovery.de", "/players/", function(body, header, status_code)
+        end)
+        async_http.set_post("application/json", json.encode(tabletest))
+        async_http.add_header("Authorization", auth)
+        async_http.dispatch()
+        util.toast(sprefix .. " Modder wurde erfolgreich auf die Datenbank übertragen, gekickt und seine Joins werden ab jetzt geblockt.")
+    end)
 end
-
 players.on_join(player)
 players.dispatch_on_join()
+
+players.on_join(function(pid)
+    while NETWORK.NETWORK_IS_IN_SESSION() == false or util.is_session_transition_active() do
+        util.yield(400)
+    end
+    if not checkmodderdb then return end
+    local own_rid = players.get_rockstar_id(players.user())
+    local json = require("json")
+    local playername = PLAYER.GET_PLAYER_NAME(pid)
+    local playerid = players.get_rockstar_id(pid)
+    if own_rid == playerid then return end
+    local query = playerid
+    local auth = "Basic TkxSX0x1YV9BUElfQUREOjIhbWRrYUYoMmgkMg=="
+    while NETWORK.NETWORK_IS_IN_SESSION() == false or util.is_session_transition_active() do
+        util.yield(450)
+    end
+    async_http.init("nolimitsrecovery.de", "/players/?search_param=" .. query, function(result, header, status_code)
+        --util.log(sprefix .. " Die website meldet folgenden Code: " .. status_code)
+        util.yield(400)
+        testvariable = result
+        if string.find(testvariable, "Modder") then
+            util.toast(sprefix .. " " .. playername .. "(" .. playerid .. ") steht als Modder in der Datenbank.")
+            util.yield(150)
+            menu.trigger_commands("historynote" .. playername .. " Modder")
+            menu.trigger_commands("historyblock" .. playername)
+            menu.trigger_commands("kick" .. playername)
+        else
+            if string.find(testvariable, "TryHard") then
+                util.toast(sprefix .. " " .. playername .. "(" .. playerid .. ") steht als TryHard in der Datenbank.")
+                util.yield(400)
+                menu.trigger_commands("historynote" .. playername .. " TryHard")
+            else
+                if string.find(testvariable, "Freund") then
+                    util.toast(sprefix .. " " .. playername .. "(" .. playerid .. ") steht als Freund in der Datenbank.")
+                    util.yield(400)
+                    menu.trigger_commands("historynote" .. playername .. " Korrekt")
+                else
+                    return
+                end
+            end
+        end
+    end)
+    async_http.add_header("Authorization", auth)
+    async_http.dispatch()
+    util.yield(200)
+end)
+
+--db_check = true
+--menu.toggle_loop(uselessdetections, "DB Modder Check", {"dbcheck"}, "Checkt ob ein Spieler ", function()
+--    for _, pid in ipairs(players.list(false, true, true)) do
+--        local json = require("json")
+--        local playername = PLAYER.GET_PLAYER_NAME(pid)
+--        local playerid = players.get_rockstar_id(pid)
+--        local query = 221214934
+--        while db_check do
+--            local auth = "Basic QXRoZWdvOkRlbml6dHVyazE2"
+--            async_http.init("nolimitsrecovery.de", "/players/?search_param=" .. query, function(result, header, status_code)
+--            local status, data = pcall(json.decode, result)
+--            util.toast(result)
+--            util.toast(status_code)
+----            end)
+--            async_http.add_header("Authorization", auth)
+--            async_http.dispatch()
+--            util.yield(5000)
+--        end
+--    end
+--end)
 
 ---------------------
 ---------------------
