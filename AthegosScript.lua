@@ -1515,8 +1515,8 @@ menu.toggle_loop(normaldetections, "Glitched Godmode", {}, "Erkennt ob jemand ei
         local height = ENTITY.GET_ENTITY_HEIGHT_ABOVE_GROUND(ped)
         for _, id in ipairs(interior_stuff) do
             if players.is_in_interior(pid) and players.is_godmode(pid) and not NETWORK.NETWORK_IS_PLAYER_FADING(pid) and ENTITY.IS_ENTITY_VISIBLE(ped) and get_spawn_state(pid) == 99 and get_interior_player_is_in(pid) == id and height >= 0.0 then
-                util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt Glitched Godmode")
-                util.draw_debug_text
+                --util.toast(sprefix .. " " .. players.get_name(pid) .. " benutzt Glitched Godmode")
+                util.draw_debug_text(sprefix .. " " .. players.get_name(pid) .. " benutzt Glitched Godmode")
                 --util.log(sprefix .. " " .. players.get_name(pid) .. " benutzt Glitched Godmode")
                 break
             end
