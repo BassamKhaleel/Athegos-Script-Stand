@@ -1530,7 +1530,7 @@ menu.toggle_loop(uselessdetections, "Deutsch", {}, "Erkennt Deutsche Spieler und
     end
 end)
 
-local checkmodderdb = false
+local checkmodderdb = true
 menu.toggle(uselessdetections, "Datenbank Check", {"dbcheck"}, "Überprüft joinende Spieler ob sie in der Datenbank hinterlegt sind.", function(on)
     checkmodderdb = on
 end)
