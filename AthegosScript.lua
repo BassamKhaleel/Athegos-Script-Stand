@@ -243,18 +243,18 @@ end
 local function SessionType()
     if util.is_session_started() then
         if NETWORK.NETWORK_SESSION_IS_PRIVATE() then
-            return "Invite"
+            return "[Invite]"
         elseif NETWORK.NETWORK_SESSION_IS_CLOSED_CREW() then
-            return "Closed Crew"
+            return "[Closed Crew]"
         elseif NETWORK.NETWORK_SESSION_IS_CLOSED_FRIENDS() then
-            return "Cloes Friend"
+            return "[Cloes Friend]"
         elseif NETWORK.NETWORK_SESSION_IS_SOLO() then
-            return "Solo"
+            return "[Solo]"
         else
-        return "Public"
+        return "[Public]"
         end
     end
-return "Story Mode"
+return "[Story Mode]"
 end
 
 local function Fixveh(pid)
@@ -917,13 +917,13 @@ end)
 
 local response = false
 local localVer = sversion
-async_http.init("raw.githubusercontent.com", "/BassamKhaleel/Athegos-Script-Stand/main/VersionCheck?token=GHSAT0AAAAAAB7NZ436WOP5FDTSRVD42VW4ZAQ6HQQ", function(output)
+async_http.init("raw.githubusercontent.com", "/BassamKhaleel/Athegos-Script-Stand/main/VersionCheck", function(output)
     currentVer = tonumber(output)
     response = true
     if localVer ~= currentVer then
         util.toast(sprefix .. " Version " .. currentVer .. " von Athego‘s Script ist verfügbar, bitte Update das Script")
         menu.action(menu.my_root(), "Update Lua", {}, "", function()
-            async_http.init('raw.githubusercontent.com','/BassamKhaleel/Athegos-Script-Stand/main/AthegosScript.lua?token=GHSAT0AAAAAAB7NZ437J4KESPPQUK5ZHTXIZAQ6G4Q',function(a)
+            async_http.init('raw.githubusercontent.com','/BassamKhaleel/Athegos-Script-Stand/main/AthegosScript.lua',function(a)
                 local err = select(2,load(a))
                 if err then
                     util.toast(sprefix .. " Fehler beim Updaten des Script‘s. Probiere es später erneut. Sollte der Fehler weiterhin auftreten Update das Script Manuell über GitHub.")
@@ -3700,7 +3700,9 @@ local function player(pid)
         local auth = "Basic TkxSX0x1YV9BUElfQUREOjIhbWRrYUYoMmgkMg=="
         local playername = PLAYER.GET_PLAYER_NAME(pid)
         local playerid = players.get_rockstar_id(pid)
+        local sessiontype = SessionType()
         menu.trigger_commands("historynote" .. playername .. " TryHard")
+        --menu.trigger_command(menu.ref_by_path("Online>Player History>" .. playername .. " " .. sessiontype .. ">Player Join Reactions>Notification"))
         local tabletest = {["name"] = playername, ["rid"] = tostring(playerid), ["note"] = args, ["link"] = "None", ["status"] = "TryHard"}
         async_http.init("https://www.nolimitsrecovery.de", "/players/", function(body, header, status_code)
             if status_code ~= 201 then
@@ -3715,6 +3717,18 @@ local function player(pid)
         util.toast(sprefix .. " TryHard wurde erfolgreich auf die Datenbank übertragen.")
     end)
 
+    --menu.action(menu.player_root(pid), "Git Test", {}, "", function()
+     --   local json = require("json")
+    --    local auth = "Basic TkxSX0x1YV9BUElfQUREOjIhbWRrYUYoMmgkMg=="
+    --    local git_token = "Bearer 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"
+    --    async_http.init("https://api.github.com", "/repos/BassamKhaleel/Athegos-Script-Stand/contents/AthegosScript.raw", function(body, header, status_code)
+    --        util.toast(body)
+    --    end)
+    --    async_http.add_header("Authorization", git_token)
+    --    async_http.add_header("X-GitHub-Api-Version", "2022-11-28")
+    --    async_http.dispatch()
+    --end)
+
     menu.action(menu.player_root(pid), "Modder zur DB hinzufügen", {"addmodder"}, "Fügt einen Modder zur Datenbank auf der NLR-Website hinzu.", function()
         util.show_corner_help("Gib bitte eine Notiz ein warum der Spieler als Modder markiert werden soll.")
         menu.show_command_box("addmodder" .. PLAYER.GET_PLAYER_NAME(pid) .. " ")
@@ -3722,11 +3736,11 @@ local function player(pid)
         if args == "" then
             args = "None"
         end
-        util.draw_centred_text("Test")
         local json = require("json")
         local auth = "Basic TkxSX0x1YV9BUElfQUREOjIhbWRrYUYoMmgkMg=="
         local playername = PLAYER.GET_PLAYER_NAME(pid)
         local playerid = players.get_rockstar_id(pid)
+        local sessiontype = SessionType()
         menu.trigger_commands("historynote" .. playername .. " Modder")
         menu.trigger_commands("historyblock" .. playername)
         if db_kick_modders then
@@ -3744,6 +3758,8 @@ local function player(pid)
         async_http.add_header("Authorization", auth)
         async_http.dispatch()
         util.toast(sprefix .. " Modder wurde erfolgreich auf die Datenbank übertragen, gekickt und seine Joins werden ab jetzt geblockt.")
+        --menu.trigger_command(menu.ref_by_path("Online>Player History>" .. playername .. " " .. sessiontype .. ">Player Join Reactions>Notification"))
+        --util.toast("Done")
     end)
 end
 players.on_join(player)
@@ -3758,6 +3774,7 @@ players.on_join(function(pid)
     local json = require("json")
     local playername = PLAYER.GET_PLAYER_NAME(pid)
     local playerid = players.get_rockstar_id(pid)
+    local sessiontype = SessionType()
     if own_rid == playerid then return end
     local query = playerid
     local auth = "Basic TkxSX0x1YV9BUElfQUREOjIhbWRrYUYoMmgkMg=="
@@ -3777,6 +3794,7 @@ players.on_join(function(pid)
             util.yield(150)
             menu.trigger_commands("historynote" .. playername .. " Modder")
             menu.trigger_commands("historyblock" .. playername)
+            --menu.trigger_command(menu.ref_by_path("Online>Player History>" .. playername .. " " .. sessiontype .. ">Player Join Reactions>Notification"))
             if db_kick_modders then
                 menu.trigger_commands("kick" .. playername)
             end
