@@ -11,9 +11,10 @@ util.require_natives("natives-1672190175-uno")
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.30)                                           --Aktuelle Script Version
+sversion = tonumber(0.31)                                           --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
+db_kick_modders = false
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
 local pedInterface = memory.read_long(replayInterface + 0x0018)
 local vehInterface = memory.read_long(replayInterface + 0x0010)
@@ -1154,10 +1155,9 @@ end)
 ---------------------
 ---------------------
 
-menu.toggle_loop(fahrzeuge, "Mk2 Aimbot", {}, "", function()
+menu.toggle_loop(fahrzeuge, "Raketen Aimbot", {}, "Ermöglicht es dir, Spieler mit den Waffen deines Fahrzeugs anzuvisieren.", function()
     local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
-    local ped_dist = v3.distance(players.get_position(players.user()), players.get_position(pid))
-    if not PED.IS_PED_DEAD_OR_DYING(ped) and PAD.IS_CONTROL_PRESSED(0, 70) and ped_dist < 200.0 then
+    if not PED.IS_PED_DEAD_OR_DYING(ped) and PAD.IS_CONTROL_PRESSED(0, 70) then
         VEHICLE.SET_VEHICLE_SHOOT_AT_TARGET(players.user_ped(), ped, players.get_position(pid))
     end
 end)
@@ -1537,6 +1537,14 @@ menu.toggle(uselessdetections, "Datenbank Check", {"dbcheck"}, "Überprüft join
     checkmodderdb = on
 end)
 
+menu.toggle(uselessdetections, "Modder automatisch kicken", {}, "Aktiviert/Deaktiviert das Modder welche in der Datenbank stehen oder von dir hinzugefügt werden automatisch gekickt werden.", function(on)
+    if on then
+        db_kick_modders = true
+    else
+        db_kick_modders = false
+    end
+end)
+
 local regionDetect = {
     [0]  = {kick = false, lang = "English"},
     [1]  = {kick = false, lang = "Französisch"},
@@ -1629,7 +1637,7 @@ menu.toggle_loop(anticage, "Anti Käfig aktivieren", {"anticage"}, "", function(
                     ENTITY.SET_ENTITY_ALPHA(obj_handle, alpha, false)
                 end
                 if data ~= 0 and cleanup then
-                    entities.set_can_migrate(entities.handle_to_pointer(obj_ptr), true)
+                    entities.set_can_migrate(obj_ptr, true)
                     ENTITY.SET_ENTITY_ALPHA(obj_handle, 0, false)
                     entities.delete_by_handle(obj_handle)
                 end
@@ -3075,7 +3083,7 @@ local function player(pid)
         repeat
             time += 1
             if time > 300 and not PED.IS_PED_IN_ANY_VEHICLE(spawned_ped, false) then
-                util.toast(sprefix .. " Fehler beim Auto Diebstahl.")
+                util.toast(sprefix .. " Fehler beim klauen von " .. players.get_name(pid) .. "'s Fahrzeug")
                 entities.delete_by_handle(spawned_ped)
                 time = 0
                 break 
@@ -3096,6 +3104,9 @@ local function player(pid)
             until TASK.GET_IS_TASK_ACTIVE(spawned_ped)
             VEHICLE.SET_VEHICLE_DOORS_LOCKED(vehicle, 2)
             util.yield(5000)
+        end
+        if spawned_ped ~= nil and not PED.IS_PED_IN_ANY_VEHICLE(spawned_ped, false) then
+            entities.delete_by_handle(spawned_ped)
         end
     end)
 
@@ -3666,6 +3677,11 @@ local function player(pid)
         menu.trigger_commands("historynote" .. playername .. " Korrekt")
         local tabletest = {["name"] = playername, ["rid"] = tostring(playerid), ["note"] = "None", ["link"] = "None", ["status"] = "Freund"}
         async_http.init("https://www.nolimitsrecovery.de", "/players/", function(body, header, status_code)
+            if status_code ~= 201 then
+                util.log(sprefix .. " Die website meldet Code: " .. status_code)
+                util.toast(sprefix .. " Die website meldet Code: " .. status_code)
+                util.toast(sprefix .. " Sollte der fehler weiterhin bestehen melde es dem Entwickler")
+            end
         end)
         async_http.set_post("application/json", json.encode(tabletest))
         async_http.add_header("Authorization", auth)
@@ -3681,6 +3697,11 @@ local function player(pid)
         menu.trigger_commands("historynote" .. playername .. " TryHard")
         local tabletest = {["name"] = playername, ["rid"] = tostring(playerid), ["note"] = "None", ["link"] = "None", ["status"] = "TryHard"}
         async_http.init("https://www.nolimitsrecovery.de", "/players/", function(body, header, status_code)
+            if status_code ~= 201 then
+                util.log(sprefix .. " Die website meldet Code: " .. status_code)
+                util.toast(sprefix .. " Die website meldet Code: " .. status_code)
+                util.toast(sprefix .. " Sollte der fehler weiterhin bestehen melde es dem Entwickler")
+            end
         end)
         async_http.set_post("application/json", json.encode(tabletest))
         async_http.add_header("Authorization", auth)
@@ -3695,9 +3716,16 @@ local function player(pid)
         local playerid = players.get_rockstar_id(pid)
         menu.trigger_commands("historynote" .. playername .. " Modder")
         menu.trigger_commands("historyblock" .. playername)
-        menu.trigger_commands("kick" .. playername)
+        if db_kick_modders then
+            menu.trigger_commands("kick" .. playername)
+        end
         local tabletest = {["name"] = playername, ["rid"] = tostring(playerid), ["note"] = "None", ["link"] = "None", ["status"] = "Modder"}
         async_http.init("https://www.nolimitsrecovery.de", "/players/", function(body, header, status_code)
+            if status_code ~= 201 then
+                util.log(sprefix .. " Die website meldet Code: " .. status_code)
+                util.toast(sprefix .. " Die website meldet Code: " .. status_code)
+                util.toast(sprefix .. " Sollte der fehler weiterhin bestehen melde es dem Entwickler")
+            end
         end)
         async_http.set_post("application/json", json.encode(tabletest))
         async_http.add_header("Authorization", auth)
@@ -3724,7 +3752,11 @@ players.on_join(function(pid)
         util.yield(450)
     end
     async_http.init("nolimitsrecovery.de", "/players/?search_param=" .. query, function(result, header, status_code)
-        --util.log(sprefix .. " Die website meldet folgenden Code: " .. status_code)
+        if status_code ~= 200 then
+            util.log(sprefix .. " Die website meldet Code: " .. status_code)
+            util.toast(sprefix .. " Die website meldet Code: " .. status_code)
+            util.toast(sprefix .. " Sollte der fehler weiterhin bestehen melde es dem Entwickler")
+        end
         util.yield(400)
         testvariable = result
         if string.find(testvariable, "Modder") then
@@ -3732,7 +3764,9 @@ players.on_join(function(pid)
             util.yield(150)
             menu.trigger_commands("historynote" .. playername .. " Modder")
             menu.trigger_commands("historyblock" .. playername)
-            menu.trigger_commands("kick" .. playername)
+            if db_kick_modders then
+                menu.trigger_commands("kick" .. playername)
+            end
         else
             if string.find(testvariable, "TryHard") then
                 util.toast(sprefix .. " " .. playername .. "(" .. playerid .. ") steht als TryHard in der Datenbank.")
@@ -3744,7 +3778,13 @@ players.on_join(function(pid)
                     util.yield(400)
                     menu.trigger_commands("historynote" .. playername .. " Korrekt")
                 else
-                    return
+                    if string.find(testvariable, "Streamer") then
+                        util.toast(sprefix .. " " .. playername .. "(" .. playerid .. ") steht als Streamer in der Datenbank.")
+                        util.yield(400)
+                        --menu.trigger_commands("historynote" .. playername .. " Streamer")
+                    else
+                        return
+                    end
                 end
             end
         end
@@ -3753,27 +3793,6 @@ players.on_join(function(pid)
     async_http.dispatch()
     util.yield(200)
 end)
-
---db_check = true
---menu.toggle_loop(uselessdetections, "DB Modder Check", {"dbcheck"}, "Checkt ob ein Spieler ", function()
---    for _, pid in ipairs(players.list(false, true, true)) do
---        local json = require("json")
---        local playername = PLAYER.GET_PLAYER_NAME(pid)
---        local playerid = players.get_rockstar_id(pid)
---        local query = 221214934
---        while db_check do
---            local auth = "Basic QXRoZWdvOkRlbml6dHVyazE2"
---            async_http.init("nolimitsrecovery.de", "/players/?search_param=" .. query, function(result, header, status_code)
---            local status, data = pcall(json.decode, result)
---            util.toast(result)
---            util.toast(status_code)
-----            end)
---            async_http.add_header("Authorization", auth)
---            async_http.dispatch()
---            util.yield(5000)
---        end
---    end
---end)
 
 ---------------------
 ---------------------
