@@ -3690,12 +3690,18 @@ local function player(pid)
     end)
 
     menu.action(menu.player_root(pid), "TryHard zur DB hinzufügen", {"addtryhard"}, "Fügt einen TryHard zur Datenbank auf der NLR-Website hinzu.", function()
+        util.show_corner_help("Gib bitte eine Notiz ein warum der Spieler als TryHard markiert werden soll.")
+        menu.show_command_box("addtryhard" .. PLAYER.GET_PLAYER_NAME(pid) .. " ")
+    end, function(args)
+        if args == "" then
+            args = "None"
+        end
         local json = require("json")
         local auth = "Basic TkxSX0x1YV9BUElfQUREOjIhbWRrYUYoMmgkMg=="
         local playername = PLAYER.GET_PLAYER_NAME(pid)
         local playerid = players.get_rockstar_id(pid)
         menu.trigger_commands("historynote" .. playername .. " TryHard")
-        local tabletest = {["name"] = playername, ["rid"] = tostring(playerid), ["note"] = "None", ["link"] = "None", ["status"] = "TryHard"}
+        local tabletest = {["name"] = playername, ["rid"] = tostring(playerid), ["note"] = args, ["link"] = "None", ["status"] = "TryHard"}
         async_http.init("https://www.nolimitsrecovery.de", "/players/", function(body, header, status_code)
             if status_code ~= 201 then
                 util.log(sprefix .. " Die website meldet Code: " .. status_code)
@@ -3710,6 +3716,13 @@ local function player(pid)
     end)
 
     menu.action(menu.player_root(pid), "Modder zur DB hinzufügen", {"addmodder"}, "Fügt einen Modder zur Datenbank auf der NLR-Website hinzu.", function()
+        util.show_corner_help("Gib bitte eine Notiz ein warum der Spieler als Modder markiert werden soll.")
+        menu.show_command_box("addmodder" .. PLAYER.GET_PLAYER_NAME(pid) .. " ")
+    end, function(args)
+        if args == "" then
+            args = "None"
+        end
+        util.draw_centred_text("Test")
         local json = require("json")
         local auth = "Basic TkxSX0x1YV9BUElfQUREOjIhbWRrYUYoMmgkMg=="
         local playername = PLAYER.GET_PLAYER_NAME(pid)
@@ -3719,7 +3732,7 @@ local function player(pid)
         if db_kick_modders then
             menu.trigger_commands("kick" .. playername)
         end
-        local tabletest = {["name"] = playername, ["rid"] = tostring(playerid), ["note"] = "None", ["link"] = "None", ["status"] = "Modder"}
+        local tabletest = {["name"] = playername, ["rid"] = tostring(playerid), ["note"] = args, ["link"] = "None", ["status"] = "Modder"}
         async_http.init("https://www.nolimitsrecovery.de", "/players/", function(body, header, status_code)
             if status_code ~= 201 then
                 util.log(sprefix .. " Die website meldet Code: " .. status_code)
