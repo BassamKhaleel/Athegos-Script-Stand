@@ -15,6 +15,7 @@ sversion = tonumber(0.31)                                           --Aktuelle S
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 db_kick_modders = false
+db_block_join_modders = false
 local replayInterface = memory.read_long(memory.rip(memory.scan("48 8D 0D ? ? ? ? 48 8B D7 E8 ? ? ? ? 48 8D 0D ? ? ? ? 8A D8 E8 ? ? ? ? 84 DB 75 13 48 8D 0D") + 3))
 local pedInterface = memory.read_long(replayInterface + 0x0018)
 local vehInterface = memory.read_long(replayInterface + 0x0010)
@@ -1542,6 +1543,14 @@ menu.toggle(uselessdetections, "Modder automatisch kicken", {}, "Aktiviert/Deakt
         db_kick_modders = true
     else
         db_kick_modders = false
+    end
+end)
+
+menu.toggle(uselessdetections, "Modder joins blocken", {}, "Aktiviert/Deaktiviert das Modder welche in der Datenbank stehen oder von dir hinzugefügt werden automatisch auf die Join Block liste kommen.", function(on)
+    if on then
+        db_block_join_modders = true
+    else
+        db_block_join_modders = false
     end
 end)
 
@@ -3742,7 +3751,9 @@ local function player(pid)
         local playerid = players.get_rockstar_id(pid)
         local sessiontype = SessionType()
         menu.trigger_commands("historynote" .. playername .. " Modder")
-        menu.trigger_commands("historyblock" .. playername)
+        if db_block_join_modders then
+            menu.trigger_commands("historyblock" .. playername) 
+        end
         if db_kick_modders then
             menu.trigger_commands("kick" .. playername)
         end
@@ -3793,7 +3804,9 @@ players.on_join(function(pid)
             util.toast(sprefix .. " " .. playername .. "(" .. playerid .. ") steht als Modder in der Datenbank.")
             util.yield(150)
             menu.trigger_commands("historynote" .. playername .. " Modder")
-            menu.trigger_commands("historyblock" .. playername)
+            if db_block_join_modders then
+                menu.trigger_commands("historyblock" .. playername) 
+            end
             --menu.trigger_command(menu.ref_by_path("Online>Player History>" .. playername .. " " .. sessiontype .. ">Player Join Reactions>Notification"))
             if db_kick_modders then
                 menu.trigger_commands("kick" .. playername)
