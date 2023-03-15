@@ -1218,6 +1218,39 @@ end)
 ---------------------
 ---------------------
 
+local nlr_db <const> = menu.list(online, "NLR Datenbank", {}, "")
+    menu.divider(nlr_db, "Athego's Script - NLR Datenbank")
+
+local checkmodderdb = false
+menu.toggle(nlr_db, "Datenbank Check", {"dbcheck"}, "Überprüft joinende Spieler ob sie in der Datenbank hinterlegt sind.", function(on)
+    checkmodderdb = on
+end)
+
+local nlr_db_modder_settings <const> = menu.list(nlr_db, "Datenbank Modder Einstellungen", {}, "")
+menu.divider(nlr_db_modder_settings, "Athego's Script - Datenbank Modder Einstellungen")
+
+menu.toggle(nlr_db_modder_settings, "Modder automatisch kicken", {}, "Aktiviert/Deaktiviert das Modder welche in der Datenbank stehen oder von dir hinzugefügt werden automatisch gekickt werden.", function(on)
+    if on then
+        db_kick_modders = true
+    else
+        db_kick_modders = false
+    end
+end)
+
+menu.toggle(nlr_db_modder_settings, "Modder joins blocken", {}, "Aktiviert/Deaktiviert das Modder welche in der Datenbank stehen oder von dir hinzugefügt werden automatisch auf die Join Block liste kommen.", function(on)
+    if on then
+        db_block_join_modders = true
+    else
+        db_block_join_modders = false
+    end
+end)
+
+local nlr_db_tryhard_settings <const> = menu.list(nlr_db, "Datenbank TryHard Einstellungen", {}, "")
+menu.divider(nlr_db_tryhard_settings, "Athego's Script - Datenbank TryHard Einstellungen")
+
+local nlr_db_freunde_settings <const> = menu.list(nlr_db, "Datenbank Freunde Einstellungen", {}, "")
+menu.divider(nlr_db_freunde_settings, "Athego's Script - Datenbank Freunde Einstellungen")
+
 local lobby <const> = menu.list(online, "Lobby", {}, "")
     menu.divider(lobby, "Athego's Script - Lobby")
 
@@ -1278,7 +1311,7 @@ end)
 ---------------------
 ---------------------
 
-local detections = menu.list(online, "Erkennungen", {}, "")
+local detections = menu.list(online, "Erkennungen", {}, "Hinweis: Die Aktivierung aller Erkennungen kann zu einem leichten Rückgang der FPS führen.")
     menu.divider(detections, "Athego's Script - Erkennungen")
 
     local modderdetections = menu.list(detections, "Modder Erkennungen", {}, "")
@@ -1530,27 +1563,6 @@ menu.toggle_loop(uselessdetections, "Deutsch", {}, "Erkennt Deutsche Spieler und
         if players.get_language(pid) == 2 then
             util.draw_debug_text(sprefix .. " " .. players.get_name(pid).. " kann Deutsch")
         end
-    end
-end)
-
-local checkmodderdb = false
-menu.toggle(uselessdetections, "Datenbank Check", {"dbcheck"}, "Überprüft joinende Spieler ob sie in der Datenbank hinterlegt sind.", function(on)
-    checkmodderdb = on
-end)
-
-menu.toggle(uselessdetections, "Modder automatisch kicken", {}, "Aktiviert/Deaktiviert das Modder welche in der Datenbank stehen oder von dir hinzugefügt werden automatisch gekickt werden.", function(on)
-    if on then
-        db_kick_modders = true
-    else
-        db_kick_modders = false
-    end
-end)
-
-menu.toggle(uselessdetections, "Modder joins blocken", {}, "Aktiviert/Deaktiviert das Modder welche in der Datenbank stehen oder von dir hinzugefügt werden automatisch auf die Join Block liste kommen.", function(on)
-    if on then
-        db_block_join_modders = true
-    else
-        db_block_join_modders = false
     end
 end)
 
