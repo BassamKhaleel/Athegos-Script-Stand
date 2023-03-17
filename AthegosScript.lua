@@ -11,7 +11,7 @@ util.require_natives("natives-1672190175-uno")
 -- Diverse Variablen
 ---------------------
 ---------------------
-sversion = tonumber(0.31)                                           --Aktuelle Script Version
+sversion = tonumber(0.32)                                           --Aktuelle Script Version
 sprefix = "[Athego's Script " .. sversion .. "]"                    --So wird die Variable benutzt: "" .. sprefix .. " 
 willkommensnachricht = "Athego's Script erfolgreich geladen!"       --Willkommensnachricht die beim Script Start angeziegt wird als Stand Benachrichtigung
 db_kick_modders = false
@@ -995,22 +995,22 @@ local orb = menu.list(self, "Anti-Orbital Kanone")
 local ghost = menu.list(orb, "Ghost")
 
 ghost_tgl = menu.toggle_loop(ghost, "Immer", {""}, "Die Spieler, die die Orbitalkanone benutzen, werden automatisch geghostet.", function()
-    for _, pid in ipairs(players.list(false, true, true)) do
+    for _, pid in players.list(false, true, true) do
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
-        local cam_pos = players.get_cam_pos(pid)
-        if IsPlayerUsingOrbitalCannon(pid) and TASK.GET_IS_TASK_ACTIVE(ped, 135)
-        and v3.distance(ENTITY.GET_ENTITY_COORDS(players.user_ped(), false), cam_pos) < 400
-        and v3.distance(ENTITY.GET_ENTITY_COORDS(players.user_ped(), false), cam_pos) > 340 then
-            util.toast(players.get_name(pid) .. " zielt mit der Orbitalkanone auf dich.")
+        local cam_dist = v3.distance(players.get_position(players.user()), players.get_cam_pos(pid))
+        if IsPlayerUsingOrbitalCannon(pid) and TASK.GET_IS_TASK_ACTIVE(ped, 135) and cam_dist < 400 and cam_dist > 340 then
+            util.toast(sprefix .. " " .. players.get_name(pid) .. " zielt mit der Orbitalkanone auf dich.")
         end
-       if IsPlayerUsingOrbitalCannon(pid) then
+        if IsPlayerUsingOrbitalCannon(pid) then
             NETWORK.SET_REMOTE_PLAYER_AS_GHOST(pid, true)
-        else
+            repeat
+                util.yield()
+            until not IsPlayerUsingOrbitalCannon(pid)
             NETWORK.SET_REMOTE_PLAYER_AS_GHOST(pid, false)
         end
     end
 end, function()
-    for _, pid in ipairs(players.list(false, true, true)) do
+    for _, pid in players.list(false, true, true) do
         NETWORK.SET_REMOTE_PLAYER_AS_GHOST(pid, false)
     end
 end)
@@ -1018,22 +1018,20 @@ end)
 local tgl
 tgl = menu.toggle_loop(ghost, "Während du im Visier bist", {}, "Spieler die mit der Orbitalkanone auf die Zielen werden geghostet.", function()
     if menu.get_value(ghost_tgl) then
-        menu.set_value(tgl, false)
+        tgl.value = false
     return end
-    for _, pid in ipairs(players.list(false, true, true)) do
+    for _, pid in players.list(false, true, true) do
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
-        local cam_pos = players.get_cam_pos(pid)
-        if IsPlayerUsingOrbitalCannon(pid) and TASK.GET_IS_TASK_ACTIVE(ped, 135) 
-        and v3.distance(ENTITY.GET_ENTITY_COORDS(players.user_ped(), false), cam_pos) < 400
-        and v3.distance(ENTITY.GET_ENTITY_COORDS(players.user_ped(), false), cam_pos) > 340 then
-            util.toast(sprefix .. "" .. players.get_name(pid) .. " zielt mit der Orbitalkanone auf dich.")
+        local cam_dist = v3.distance(players.get_position(players.user()), players.get_cam_pos(pid))
+        if IsPlayerUsingOrbitalCannon(pid) and TASK.GET_IS_TASK_ACTIVE(ped, 135) and cam_dist < 400 and cam_dist > 340 then
+            util.toast(sprefix .. " " .. players.get_name(pid) .. " zielt mit der Orbitalkanone auf dich.")
             NETWORK.SET_REMOTE_PLAYER_AS_GHOST(pid, true)
         else
             NETWORK.SET_REMOTE_PLAYER_AS_GHOST(pid, false)
         end
     end
 end, function()
-    for _, pid in ipairs(players.list(false, true, true)) do
+    for _, pid in players.list(false, true, true) do
         NETWORK.SET_REMOTE_PLAYER_AS_GHOST(pid, false)
     end
 end)
@@ -1447,7 +1445,6 @@ menu.toggle_loop(modderdetections, "Thunder Join", {}, "Erkennt ob jemand Thunde
         if old_sh ~= new_sh then
             if GetSpawnState(pid) == 0 and players.get_script_host() == pid then
                 util.toast(sprefix .. " " .. players.get_name(pid) .. " hat die Erkennungen (Thunder Join) ausgelöst und ist nun als Modder eingestuft")
-                --util.log(sprefix .. " " .. players.get_name(pid) .. " hat die Erkennungen (Thunder Join) ausgelöst und ist nun als Modder eingestuft")
                 break
             end
         end
@@ -1459,7 +1456,6 @@ menu.toggle_loop(modderdetections, "Modded Orbital Kanone", {}, "Erkennt ob jema
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         if IsPlayerUsingOrbitalCannon(pid) and not TASK.GET_IS_TASK_ACTIVE(ped, 135) and GetSpawnState(pid) ~= 0 then
             util.toast(sprefix .. " " .. players.get_name(pid) .. " verwendet eine Gemoddete Orbital Kanone")
-            --util.log(sprefix .. " " .. players.get_name(pid) .. " verwendet eine Gemoddete Orbital Kanone")
             break
         end
     end
@@ -1537,7 +1533,6 @@ menu.toggle_loop(normaldetections, "Orbital Kanone", {}, "Erkennt ob jemand die 
         local ped = PLAYER.GET_PLAYER_PED_SCRIPT_INDEX(pid)
         if IsPlayerUsingOrbitalCannon(pid) and TASK.GET_IS_TASK_ACTIVE(ped, 135)then
             util.toast(sprefix .. " " .. players.get_name(pid) .. " ist bei der Orbital Kanone")
-            --util.log(sprefix .. " " .. players.get_name(pid) .. " ist bei der Orbital Kanone")
         end
     end
 end)
@@ -1562,6 +1557,14 @@ menu.toggle_loop(uselessdetections, "Deutsch", {}, "Erkennt Deutsche Spieler und
     for _, pid in ipairs(players.list(true, true, true)) do
         if players.get_language(pid) == 2 then
             util.draw_debug_text(sprefix .. " " .. players.get_name(pid).. " kann Deutsch")
+        end
+    end
+end)
+
+menu.toggle_loop(uselessdetections, "Russisch", {}, "Erkennt Russische Spieler und zeigt dir sie an!", function()
+    for _, pid in ipairs(players.list(true, true, true)) do
+        if players.get_language(pid) == 7 then
+            util.draw_debug_text(sprefix .. " " .. players.get_name(pid).. " kann Russisch")
         end
     end
 end)
@@ -3695,19 +3698,39 @@ local function player(pid)
         local auth = "Basic TkxSX0x1YV9BUElfQUREOjIhbWRrYUYoMmgkMg=="
         local playername = PLAYER.GET_PLAYER_NAME(pid)
         local playerid = players.get_rockstar_id(pid)
-        menu.trigger_commands("historynote" .. playername .. " Korrekt")
-        local tabletest = {["name"] = playername, ["rid"] = tostring(playerid), ["note"] = "None", ["link"] = "None", ["status"] = "Freund"}
-        async_http.init("https://www.nolimitsrecovery.de", "/players/", function(body, header, status_code)
-            if status_code ~= 201 then
-                util.log(sprefix .. " Die website meldet Code: " .. status_code)
-                util.toast(sprefix .. " Die website meldet Code: " .. status_code)
-                util.toast(sprefix .. " Sollte der fehler weiterhin bestehen melde es dem Entwickler")
+        async_http.init("nolimitsrecovery.de", "/players/?search_param=" .. playerid, function(result, header, status_code)
+            if string.find(result, "Freund") then
+                status = "Freund"
+            end
+            if string.find(result, "TryHard") then
+                status = "TryHard"
+            end
+            if string.find(result, "Modder") then
+                status = "Modder"
+            end
+            if string.find(result, "Streamer") then
+                status = "Streamer"
+            end
+            if string.find(result, playerid) then
+                util.toast(sprefix .. " " .. playername .. " steht bereits als " .. status .. " in der Datenbank und kann nicht erneut hinzugefügt werden.")
+            else
+                menu.trigger_commands("historynote" .. playername .. " Korrekt")
+                local tabletest = {["name"] = playername, ["rid"] = tostring(playerid), ["note"] = "None", ["link"] = "None", ["status"] = "Freund"}
+                async_http.init("https://www.nolimitsrecovery.de", "/players/", function(body, header, status_code)
+                    if status_code ~= 201 then
+                        util.log(sprefix .. " Die website meldet Code: " .. status_code)
+                        util.toast(sprefix .. " Die website meldet Code: " .. status_code)
+                        util.toast(sprefix .. " Sollte der fehler weiterhin bestehen melde es dem Entwickler")
+                    end
+                end)
+                async_http.set_post("application/json", json.encode(tabletest))
+                async_http.add_header("Authorization", auth)
+                async_http.dispatch()
+                util.toast(sprefix .. " Freund wurde erfolgreich auf die Datenbank übertragen.")
             end
         end)
-        async_http.set_post("application/json", json.encode(tabletest))
         async_http.add_header("Authorization", auth)
         async_http.dispatch()
-        util.toast(sprefix .. " Freund wurde erfolgreich auf die Datenbank übertragen.")
     end)
 
     menu.action(menu.player_root(pid), "TryHard zur DB hinzufügen", {"addtryhard"}, "Fügt einen TryHard zur Datenbank auf der NLR-Website hinzu.", function()
@@ -3722,33 +3745,40 @@ local function player(pid)
         local playername = PLAYER.GET_PLAYER_NAME(pid)
         local playerid = players.get_rockstar_id(pid)
         local sessiontype = SessionType()
-        menu.trigger_commands("historynote" .. playername .. " TryHard")
-        --menu.trigger_command(menu.ref_by_path("Online>Player History>" .. playername .. " " .. sessiontype .. ">Player Join Reactions>Notification"))
-        local tabletest = {["name"] = playername, ["rid"] = tostring(playerid), ["note"] = args, ["link"] = "None", ["status"] = "TryHard"}
-        async_http.init("https://www.nolimitsrecovery.de", "/players/", function(body, header, status_code)
-            if status_code ~= 201 then
-                util.log(sprefix .. " Die website meldet Code: " .. status_code)
-                util.toast(sprefix .. " Die website meldet Code: " .. status_code)
-                util.toast(sprefix .. " Sollte der fehler weiterhin bestehen melde es dem Entwickler")
+        async_http.init("nolimitsrecovery.de", "/players/?search_param=" .. playerid, function(result, header, status_code)
+            if string.find(result, "Freund") then
+                status = "Freund"
+            end
+            if string.find(result, "TryHard") then
+                status = "TryHard"
+            end
+            if string.find(result, "Modder") then
+                status = "Modder"
+            end
+            if string.find(result, "Streamer") then
+                status = "Streamer"
+            end
+            if string.find(result, playerid) then
+                util.toast(sprefix .. " " .. playername .. " steht bereits als " .. status .. " in der Datenbank und kann nicht erneut hinzugefügt werden.")
+            else
+                menu.trigger_commands("historynote" .. playername .. " TryHard")
+                local tabletest = {["name"] = playername, ["rid"] = tostring(playerid), ["note"] = args, ["link"] = "None", ["status"] = "TryHard"}
+                async_http.init("https://www.nolimitsrecovery.de", "/players/", function(body, header, status_code)
+                    if status_code ~= 201 then
+                        util.log(sprefix .. " Die website meldet Code: " .. status_code)
+                        util.toast(sprefix .. " Die website meldet Code: " .. status_code)
+                        util.toast(sprefix .. " Sollte der fehler weiterhin bestehen melde es dem Entwickler")
+                    end
+                end)
+                async_http.set_post("application/json", json.encode(tabletest))
+                async_http.add_header("Authorization", auth)
+                async_http.dispatch()
+                util.toast(sprefix .. " TryHard wurde erfolgreich auf die Datenbank übertragen.")
             end
         end)
-        async_http.set_post("application/json", json.encode(tabletest))
         async_http.add_header("Authorization", auth)
         async_http.dispatch()
-        util.toast(sprefix .. " TryHard wurde erfolgreich auf die Datenbank übertragen.")
     end)
-
-    --menu.action(menu.player_root(pid), "Git Test", {}, "", function()
-     --   local json = require("json")
-    --    local auth = "Basic TkxSX0x1YV9BUElfQUREOjIhbWRrYUYoMmgkMg=="
-    --    local git_token = "Bearer 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"
-    --    async_http.init("https://api.github.com", "/repos/BassamKhaleel/Athegos-Script-Stand/contents/AthegosScript.raw", function(body, header, status_code)
-    --        util.toast(body)
-    --    end)
-    --    async_http.add_header("Authorization", git_token)
-    --    async_http.add_header("X-GitHub-Api-Version", "2022-11-28")
-    --    async_http.dispatch()
-    --end)
 
     menu.action(menu.player_root(pid), "Modder zur DB hinzufügen", {"addmodder"}, "Fügt einen Modder zur Datenbank auf der NLR-Website hinzu.", function()
         util.show_corner_help("Gib bitte eine Notiz ein warum der Spieler als Modder markiert werden soll.")
@@ -3762,28 +3792,92 @@ local function player(pid)
         local playername = PLAYER.GET_PLAYER_NAME(pid)
         local playerid = players.get_rockstar_id(pid)
         local sessiontype = SessionType()
-        menu.trigger_commands("historynote" .. playername .. " Modder")
-        if db_block_join_modders then
-            menu.trigger_commands("historyblock" .. playername) 
-        end
-        if db_kick_modders then
-            menu.trigger_commands("kick" .. playername)
-        end
-        local tabletest = {["name"] = playername, ["rid"] = tostring(playerid), ["note"] = args, ["link"] = "None", ["status"] = "Modder"}
-        async_http.init("https://www.nolimitsrecovery.de", "/players/", function(body, header, status_code)
-            if status_code ~= 201 then
-                util.log(sprefix .. " Die website meldet Code: " .. status_code)
-                util.toast(sprefix .. " Die website meldet Code: " .. status_code)
-                util.toast(sprefix .. " Sollte der fehler weiterhin bestehen melde es dem Entwickler")
+        async_http.init("nolimitsrecovery.de", "/players/?search_param=" .. playerid, function(result, header, status_code)
+            if string.find(result, "Freund") then
+                status = "Freund"
+            end
+            if string.find(result, "TryHard") then
+                status = "TryHard"
+            end
+            if string.find(result, "Modder") then
+                status = "Modder"
+            end
+            if string.find(result, "Streamer") then
+                status = "Streamer"
+            end
+            if string.find(result, playerid) then
+                util.toast(sprefix .. " " .. playername .. " steht bereits als " .. status .. " in der Datenbank und kann nicht erneut hinzugefügt werden.")
+            else
+                menu.trigger_commands("historynote" .. playername .. " Modder")
+                if db_block_join_modders then
+                    menu.trigger_commands("historyblock" .. playername) 
+                end
+                if db_kick_modders then
+                    menu.trigger_commands("kick" .. playername)
+                end
+                local tabletest = {["name"] = playername, ["rid"] = tostring(playerid), ["note"] = args, ["link"] = "None", ["status"] = "Modder"}
+                async_http.init("https://www.nolimitsrecovery.de", "/players/", function(body, header, status_code)
+                    if status_code ~= 201 then
+                        util.log(sprefix .. " Die website meldet Code: " .. status_code)
+                        util.toast(sprefix .. " Die website meldet Code: " .. status_code)
+                        util.toast(sprefix .. " Sollte der fehler weiterhin bestehen melde es dem Entwickler")
+                    end
+                end)
+                async_http.set_post("application/json", json.encode(tabletest))
+                async_http.add_header("Authorization", auth)
+                async_http.dispatch()
+                util.toast(sprefix .. " Modder wurde erfolgreich auf die Datenbank übertragen, gekickt und seine Joins werden ab jetzt geblockt.")
             end
         end)
-        async_http.set_post("application/json", json.encode(tabletest))
         async_http.add_header("Authorization", auth)
         async_http.dispatch()
-        util.toast(sprefix .. " Modder wurde erfolgreich auf die Datenbank übertragen, gekickt und seine Joins werden ab jetzt geblockt.")
         --menu.trigger_command(menu.ref_by_path("Online>Player History>" .. playername .. " " .. sessiontype .. ">Player Join Reactions>Notification"))
-        --util.toast("Done")
     end)
+
+    --menu.action(menu.player_root(pid), "DB Test", {"addmodder"}, "Fügt einen Modder zur Datenbank auf der NLR-Website hinzu.", function()
+    --    util.show_corner_help("Gib bitte eine Notiz ein warum der Spieler als Modder markiert werden soll.")
+    --    menu.show_command_box("addmodder" .. PLAYER.GET_PLAYER_NAME(pid) .. " ")
+    --end, function(args)
+    --    if args == "" then
+    --        args = "None"
+    --    end
+    --    local json = require("json")
+    --    local auth = "Basic TkxSX0x1YV9BUElfQUREOjIhbWRrYUYoMmgkMg=="
+    --    local playername = PLAYER.GET_PLAYER_NAME(pid)
+    --    local playerid = players.get_rockstar_id(pid)
+    --    local sessiontype = SessionType()
+   --     async_http.init("nolimitsrecovery.de", "/players/?search_param=" .. playerid, function(result, header, status_code)
+    --        util.toast(result)
+    --        if string.find(result, playerid) then
+   --             util.toast(sprefix .. " Steht bereits in der Datenbank und kann nicht erneut hinzugefügt werden.")
+    --        else
+    --            util.toast("Steht nicht in der Datenbank.")
+    --        end
+    --    end)
+    --    async_http.add_header("Authorization", auth)
+    --    async_http.dispatch()
+        --menu.trigger_commands("historynote" .. playername .. " Modder")
+        --if db_block_join_modders then
+        --    menu.trigger_commands("historyblock" .. playername) 
+        --end
+        --if db_kick_modders then
+        --    menu.trigger_commands("kick" .. playername)
+        --end
+        --local tabletest = {["name"] = playername, ["rid"] = tostring(playerid), ["note"] = args, ["link"] = "None", ["status"] = "Modder"}
+        --async_http.init("https://www.nolimitsrecovery.de", "/players/", function(body, header, status_code)
+        --    if status_code ~= 201 then
+        --        util.log(sprefix .. " Die website meldet Code: " .. status_code)
+        --        util.toast(sprefix .. " Die website meldet Code: " .. status_code)
+        --        util.toast(sprefix .. " Sollte der fehler weiterhin bestehen melde es dem Entwickler")
+        --    end
+        --end)
+        --async_http.set_post("application/json", json.encode(tabletest))
+        --async_http.add_header("Authorization", auth)
+        --async_http.dispatch()
+        --util.toast(sprefix .. " Modder wurde erfolgreich auf die Datenbank übertragen, gekickt und seine Joins werden ab jetzt geblockt.")
+        --menu.trigger_command(menu.ref_by_path("Online>Player History>" .. playername .. " " .. sessiontype .. ">Player Join Reactions>Notification"))
+    --end)
+
 end
 players.on_join(player)
 players.dispatch_on_join()
@@ -3817,11 +3911,12 @@ players.on_join(function(pid)
             util.yield(150)
             menu.trigger_commands("historynote" .. playername .. " Modder")
             if db_block_join_modders then
-                menu.trigger_commands("historyblock" .. playername) 
+                menu.trigger_commands("historyblock" .. playername)
+                util.toast(sprefix .. " Seine Joins werden ab jetzt geblockt.")
             end
-            --menu.trigger_command(menu.ref_by_path("Online>Player History>" .. playername .. " " .. sessiontype .. ">Player Join Reactions>Notification"))
             if db_kick_modders then
                 menu.trigger_commands("kick" .. playername)
+                util.toast(sprefix .. " Es wird versucht den Modder zu kicken.")
             end
         else
             if string.find(testvariable, "TryHard") then
